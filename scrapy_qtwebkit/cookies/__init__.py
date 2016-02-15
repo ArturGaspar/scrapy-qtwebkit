@@ -1,8 +1,8 @@
 import datetime
 from cookielib import Absent
 
-from PyQt5.QtCore import QDateTime
-from PyQt5.QtNetwork import QNetworkCookie, QNetworkCookieJar
+from ..qt.QtCore import QDateTime
+from ..qt.QtNetwork import QNetworkCookie, QNetworkCookieJar
 
 from ._cookies_for_url import cookies_for_url
 

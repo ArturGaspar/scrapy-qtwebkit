@@ -1,11 +1,12 @@
 import json
 import time
 
-from PyQt5.QtWebKit import QWebElement, QWebElementCollection
 from scrapy import log as scrapy_log
 from twisted.internet import reactor
 from twisted.internet.defer import (Deferred, inlineCallbacks, maybeDeferred,
                                     returnValue)
+
+from .qt.QtWebKit import QWebElement, QWebElementCollection
 
 
 def deferred_for_signal(signal):

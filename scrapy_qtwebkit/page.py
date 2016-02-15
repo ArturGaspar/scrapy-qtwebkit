@@ -1,9 +1,10 @@
 from functools import partial
 
-from PyQt5.QtCore import pyqtSignal
-from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest
-from PyQt5.QtWebKitWidgets import QWebPage
 from scrapy.http import Headers
+
+from .qt.QtCore import pyqtSignal
+from .qt.QtNetwork import QNetworkReply, QNetworkRequest
+from .qt.QtWebKitWidgets import QWebPage
 
 
 # TODO: handlers for JavaScript message boxes.

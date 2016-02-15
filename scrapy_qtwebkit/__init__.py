@@ -1,12 +1,6 @@
 import weakref
 from functools import partial
 
-from PyQt5.QtCore import QByteArray, QUrl
-from PyQt5.QtNetwork import (QNetworkAccessManager, QNetworkReply,
-                             QNetworkRequest)
-from PyQt5.QtWidgets import QApplication, QMdiArea
-from PyQt5.QtWebKit import QWebSettings
-from PyQt5.QtWebKitWidgets import QWebPage, QWebView
 from scrapy import signals
 from scrapy.downloadermiddlewares.cookies import CookiesMiddleware
 from scrapy.exceptions import NotSupported
@@ -19,6 +13,12 @@ from twisted.internet.error import (ConnectError, ConnectingCancelledError,
                                     ConnectionLost, ConnectionRefusedError,
                                     DNSLookupError, SSLError, TimeoutError)
 from twisted.python.failure import Failure
+
+from .qt.QtCore import QByteArray, QUrl
+from .qt.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
+from .qt.QtWidgets import QApplication, QMdiArea
+from .qt.QtWebKit import QWebSettings
+from .qt.QtWebKitWidgets import QWebPage, QWebView
 
 from .cookies import ScrapyAwareCookieJar
 from .utils import deferred_for_signal
@@ -143,7 +143,8 @@ class BaseQtWebKitMiddleware(object):
         self.qt_platform = qt_platform
         self.enable_webkit_dev_tools = enable_webkit_dev_tools
         if page_limit != 1:
-            QWebSettings.setObjectCacheCapacities(0, 0, 0)
+            if QWebSettings is not None:
+                QWebSettings.setObjectCacheCapacities(0, 0, 0)
         if page_limit is None:
             self.semaphore = DummySemaphore()
         else:
