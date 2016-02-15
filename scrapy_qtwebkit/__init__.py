@@ -54,7 +54,11 @@ class QtWebKitRequest(Request):
     """
 
     A request to be handled by Qt WebKit. May be provided either an URL to
-    open a new webpage for, or an existing webpage to continue with.
+    open a new webpage for, or an existing webpage object to continue
+    processing in the callback.
+
+    The latter option is useful for producing items or requests, but keeping
+    the page open for further processing.
 
     """
 
