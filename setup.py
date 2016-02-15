@@ -8,5 +8,5 @@ setup(
     author='Artur Gaspar',
     author_email='artur.gaspar.00@gmail.com',
     packages=['scrapy_qtwebkit'],
-    install_requires=['Twisted>=15', 'Scrapy>=1.1']
+    install_requires=['Twisted>=15', 'Scrapy>=1.1.0rc1']
 )
