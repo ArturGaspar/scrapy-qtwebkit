@@ -1,12 +1,15 @@
 import json
+import logging
 import time
 
-from scrapy import log as scrapy_log
 from twisted.internet import reactor
 from twisted.internet.defer import (Deferred, inlineCallbacks, maybeDeferred,
                                     returnValue)
 
 from .qt.QtWebKit import QWebElement, QWebElementCollection
+
+
+logger = logging.getLogger()
 
 
 def deferred_for_signal(signal):
@@ -41,7 +44,7 @@ class ElementDidNotAppear(Exception):
 def wait_for_element(func, *args, **kwargs):
     interval = kwargs.pop('interval', 1)
     timeout = kwargs.pop('timeout', 30)
-    log = kwargs.pop('log', scrapy_log.msg)
+    log = kwargs.pop('log', logger.debug)
 
     description = kwargs.pop('description', None)
     if description is None:
@@ -52,8 +55,7 @@ def wait_for_element(func, *args, **kwargs):
     start = time.time()
 
     while timeout is None or (time.time() - start) <= timeout:
-        log("Waiting for element {}".format(description),
-            level=scrapy_log.DEBUG)
+        log("Waiting for element {}".format(description))
         el = yield maybeDeferred(func, *args, **kwargs)
         if isinstance(el, QWebElement):
             if not el.isNull():
