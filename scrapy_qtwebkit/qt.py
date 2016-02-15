@@ -1,3 +1,12 @@
+"""
+
+Importer that decides on which Qt module to load at runtime.
+
+Intended to enable compatibility with PySide2 when it is released.
+
+"""
+
+
 import importlib
 import os
 import sys
@@ -8,7 +17,7 @@ __path__ = []
 
 
 class QtImporter(object):
-    qt_bindings = ['PyQt5', 'PySide2']
+    qt_bindings = ['PyQt5']
 
     def __init__(self, qt_package=None, this_package=__name__):
         super(QtImporter, self).__init__()
