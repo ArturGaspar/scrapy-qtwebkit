@@ -1,11 +1,10 @@
 import datetime
-from cookielib import Absent, IPV4_RE
-from urlparse import urlparse
+from cookielib import Absent
 
 from PyQt5.QtCore import QDateTime
 from PyQt5.QtNetwork import QNetworkCookie, QNetworkCookieJar
-from scrapy import Request
-from scrapy.http.cookies import WrappedRequest, potential_domain_matches
+
+from ._cookies_for_url import cookies_for_url
 
 
 class ScrapyAwareCookieJar(QNetworkCookieJar):
@@ -50,27 +49,8 @@ class ScrapyAwareCookieJar(QNetworkCookieJar):
         ), None)
 
     def _cookies_for_url(self, url):
-        """
-
-        Get cookies (as cookielib.Cookie objects) for an URL.
-
-        Adapted from scrapy.http.cookies.CookieJar.add_cookie_header().
-
-        """
-
-        host = urlparse(url).hostname
-        if not IPV4_RE.search(host):
-            hosts = potential_domain_matches(host)
-            if host.find(".") == -1:
-                hosts += host + ".local"
-        else:
-            hosts = [host]
-
-        for host in hosts:
-            if host in self._jar.jar._cookies:
-                wreq = WrappedRequest(Request(url))
-                for cookie in self._jar.jar._cookies_for_domain(host, wreq):
-                    yield cookie
+        """Get cookies (as cookielib.Cookie objects) for an URL."""
+        return cookies_for_url(self._jar.jar, url)
 
     def cookiesForUrl(self, qurl):
         self._jar.jar.clear_expired_cookies()
