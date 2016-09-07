@@ -86,7 +86,7 @@ class ScrapyNetworkReply(QNetworkReply):
         super(ScrapyNetworkReply, self).__init__(nam)
         self.aborted = False
         self.content = BytesIO()
-        self.open(QIODevice.ReadOnly | QIODevice.Unbuffered)
+        self.open(QIODevice.ReadOnly)
 
     def callback(self, response):
         """Finish the Qt network reply with a Scrapy response."""
