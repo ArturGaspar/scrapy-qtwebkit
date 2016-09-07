@@ -89,6 +89,14 @@ class QtWebKitRequest(Request):
         return super(QtWebKitRequest, self).replace(*args, **kwargs)
 
 
+class QtWebKitResponse(HtmlResponse):
+    def update_body(self):
+        self._cached_benc = None
+        self._cached_ubody = None
+        self._cached_selector = None
+        self._set_body(self.webpage.mainFrame().toHtml())
+
+
 class _QApplicationStopper(object):
     def __init__(self, signal_manager, app):
         super(_QApplicationStopper, self).__init__()
@@ -317,14 +325,20 @@ class BaseQtWebKitMiddleware(object):
                 else:
                     url = webpage.mainFrame().url()
 
-                response = HtmlResponse(status=status,
-                                        url=url.toString(),
-                                        headers=error.headers,
-                                        body=webpage.mainFrame().toHtml(),
-                                        encoding='utf-8',
-                                        request=request)
+                qwebpage_response = request.meta.get('qwebpage_response', False)
+                if qwebpage_response:
+                    respcls = QtWebKitResponse
+                else:
+                    respcls = HtmlResponse
 
-                if request.meta.get('qwebpage_response', False):
+                response = respcls(status=status,
+                                   url=url.toString(),
+                                   headers=error.headers,
+                                   body=webpage.mainFrame().toHtml(),
+                                   encoding='utf-8',
+                                   request=request)
+
+                if qwebpage_response:
                     response.webpage = webpage
                     request.callback = partial(self._request_callback, spider,
                                                request.callback or 'parse')
