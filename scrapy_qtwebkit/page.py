@@ -57,8 +57,10 @@ class WebPage(QWebPage):
                                                       reply.rawHeaderPairs()))
 
     def _on_load_finished(self, ok):
-        self.load_finished_with_error.emit(ok, (self._current_error or
-                                                self._dummy_error))
+        error = self._current_error or self._dummy_error
+        if error.domain == QWebPage.Http:
+            ok = True
+        self.load_finished_with_error.emit(ok, error)
         self.reset_curent_error()
 
     def extension(self, extension, option=None, output=None):
