@@ -36,9 +36,11 @@ class ScrapyNetworkAccessManager(QNetworkAccessManager):
 
         request.setHeader(QNetworkRequest.UserAgentHeader, None)
         headers = {bytes(header): bytes(request.rawHeader(header))
-                   for header in request.rawHeaderList()}
+                   for header in request.rawHeaderList()
+                   # Scrapy will already add Content-Length when it is needed.
+                   if header not in {b'Content-Length'}}
         if self.user_agent is not None:
-            headers['User-Agent'] = self.user_agent
+            headers[b'User-Agent'] = self.user_agent
 
         if device:
             body = bytes(device.readAll())
@@ -143,7 +145,7 @@ class ScrapyNetworkReply(QNetworkReply):
         return failure
 
     def bytesAvailable(self):
-        return len(self.content.getvalue()) - self.content.tell()
+        return super(ScrapyNetworkReply, self).bytesAvailable() + (len(self.content.getvalue()) - self.content.tell())
 
     def readData(self, size):
         return self.content.read(size)
