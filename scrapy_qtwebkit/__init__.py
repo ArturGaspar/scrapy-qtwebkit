@@ -377,6 +377,8 @@ class BaseQtWebKitMiddleware(object):
             returnValue(arg_to_iter((yield maybeDeferred(original_callback,
                                                          response))))
         finally:
+            # FIXME: sometimes this section is reached before the wrapped
+            # callback finishes, when it returns a Deferred.
             if response.should_close_webpage:
                 self._close_page(webpage)
             else:
