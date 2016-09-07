@@ -418,6 +418,7 @@ class BaseQtWebKitMiddleware(object):
         return exc_cls(option.errorString)
 
 
+# FIXME: prevent subwindows from being reordered.
 class MdiAreaQtWebKitMiddleware(BaseQtWebKitMiddleware):
     def __init__(self, *args, **kwargs):
         super(MdiAreaQtWebKitMiddleware, self).__init__(*args, **kwargs)
