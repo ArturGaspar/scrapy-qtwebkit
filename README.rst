@@ -41,5 +41,5 @@ The middleware can be configured with the following settings:
 - ``QTWEBKIT_PAGE_LIMIT`` - Limit of pages to have open at the same time.
 
 
-The module also provides a downloader for data: URLs and a log formatter that
-lowers the level of requests made by WebKit below DEBUG level.
+The module also provides a log formatter that lowers the level of requests made
+by WebKit below DEBUG level.
