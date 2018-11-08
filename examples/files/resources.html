@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Example page</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <script>
+        var init = function() {
+            var el = document.getElementById("message");
+            el.appendChild(document.createTextNode("Hello world!"));
+        }
+
+        document.addEventListener("DOMContentLoaded", function(event) {
+            init();
+        });
+    </script>
+    <span id="message"></span>
+</body>
+</html>

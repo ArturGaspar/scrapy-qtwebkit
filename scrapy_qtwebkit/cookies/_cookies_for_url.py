@@ -28,8 +28,8 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
-from cookielib import IPV4_RE
-from urlparse import urlparse
+from http.cookiejar import IPV4_RE
+from urllib.parse import urlparse
 
 from scrapy import Request
 from scrapy.http.cookies import WrappedRequest, potential_domain_matches

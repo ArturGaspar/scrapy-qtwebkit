@@ -1,6 +1,11 @@
 import weakref
 from functools import partial
 
+from PyQt5.QtCore import QByteArray, QUrl
+from PyQt5.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
+from PyQt5.QtWidgets import QApplication, QMdiArea
+from PyQt5.QtWebKit import QWebSettings
+from PyQt5.QtWebKitWidgets import QWebPage, QWebView
 from scrapy import signals
 from scrapy.downloadermiddlewares.cookies import CookiesMiddleware
 from scrapy.exceptions import NotSupported
@@ -13,12 +18,6 @@ from twisted.internet.error import (ConnectError, ConnectingCancelledError,
                                     ConnectionLost, ConnectionRefusedError,
                                     DNSLookupError, SSLError, TimeoutError)
 from twisted.python.failure import Failure
-
-from .qt.QtCore import QByteArray, QUrl
-from .qt.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
-from .qt.QtWidgets import QApplication, QMdiArea
-from .qt.QtWebKit import QWebSettings
-from .qt.QtWebKitWidgets import QWebPage, QWebView
 
 from .cookies import ScrapyAwareCookieJar
 from .utils import deferred_for_signal
@@ -368,7 +367,7 @@ class BaseQtWebKitMiddleware(object):
 
         """
 
-        if isinstance(original_callback, basestring):
+        if isinstance(original_callback, str):
             original_callback = getattr(spider, original_callback)
 
         webpage = response.webpage

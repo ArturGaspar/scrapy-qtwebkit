@@ -1,14 +1,10 @@
 # -*- coding: utf-8 -*-
 
-SPIDER_MODULES = ['angularjs_hello_text.spider']
-NEWSPIDER_MODULE = 'angularjs_hello_text.spider'
+SPIDER_MODULES = ['hello_world.spider']
+NEWSPIDER_MODULE = 'hello_world.spider'
 
 DOWNLOADER_MIDDLEWARES = {
     'scrapy_qtwebkit.QtWebKitMiddleware': 200
-}
-
-DOWNLOAD_HANDLERS = {
-    'data': 'scrapy_qtwebkit.data_downloader.DataURLDownloadHandler'
 }
 
 QTWEBKIT_SHOW_WINDOW = True

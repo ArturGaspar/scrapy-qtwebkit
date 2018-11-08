@@ -1,5 +1,8 @@
 from io import BytesIO
 
+from PyQt5.QtCore import QIODevice, QUrl
+from PyQt5.QtNetwork import (QNetworkAccessManager, QNetworkReply,
+                             QNetworkRequest)
 from scrapy import Request
 from scrapy.exceptions import IgnoreRequest, NotSupported
 from twisted.internet.defer import fail, maybeDeferred
@@ -8,9 +11,6 @@ from twisted.internet.error import (ConnectingCancelledError,
                                     ConnectionRefusedError, DNSLookupError,
                                     SSLError, TCPTimedOutError, TimeoutError,
                                     UnknownHostError)
-
-from .qt.QtCore import QIODevice, QUrl
-from .qt.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
 
 from . import QT_OPERATION_TO_HTTP_METHOD
 from .cookies import ScrapyAwareCookieJar
@@ -49,7 +49,7 @@ class ScrapyNetworkAccessManager(QNetworkAccessManager):
             body = None
 
         is_first_request = not self._had_requests
-        scrapy_req = Request(bytes(request.url().toEncoded()), method=method,
+        scrapy_req = Request(request.url().toString(), method=method,
                              headers=headers, body=body,
                              callback=reply.callback, errback=reply.errback,
                              dont_filter=True,
