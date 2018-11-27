@@ -20,8 +20,10 @@ class ExampleSpider(Spider):
             {"title": response.xpath('/html/head/title/text()').extract_first()}
         )
 
-        yield response.webpage.callRemote('run_script',
-                                          'document.title = "Javascript!";')
+        yield response.webpage.run_script("""
+            document.title = "Javascript!";
+        """)
+
         yield response.update_body()
 
         items.append(

@@ -13,6 +13,7 @@ from twisted.spread import jelly, pb
 from .._intermediaries import RequestFromScrapy, ScrapyNotSupported
 from .cookies import RemotelyAccessbileCookiesMiddleware
 from .downloader import BrowserRequestDownloader
+from .utils import PbReferenceMethodsWrapper
 
 
 __all__ = ['BrowserMiddleware']
@@ -209,7 +210,7 @@ class BrowserMiddleware(object):
                                    request=request)
 
                 if browser_response:
-                    response.webpage = webpage
+                    response.webpage = PbReferenceMethodsWrapper(webpage)
 
             else:
                 if isinstance(exc, ScrapyNotSupported):
