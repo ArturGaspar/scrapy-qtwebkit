@@ -1,8 +1,8 @@
-from scrapy import Request
-from scrapy.exceptions import IgnoreRequest, NotSupported
-from scrapy.signals import request_dropped
-from scrapy.utils.datatypes import CaselessDict
+import logging
 
+from scrapy import Request, signals
+from scrapy.exceptions import IgnoreRequest, NotSupported
+from scrapy.utils.datatypes import CaselessDict
 from twisted.internet.defer import Deferred
 from twisted.internet.error import ConnectionAborted
 from twisted.python.failure import Failure
@@ -12,9 +12,12 @@ from .._intermediaries import (ResponseFromScrapy, ScrapyIgnoreRequest,
                                ScrapyNotSupported)
 
 
+logger = logging.getLogger(__name__)
+
+
 class _BrowserDownloadRequest(Request):
     def __str__(self):
-        return "<%s %s (from browser)>" % (self.method, self.url)
+        return "{} (from browser engine)".format(super().__str__())
 
     __repr__ = __str__
 
@@ -24,20 +27,17 @@ class BrowserRequestDownloader(pb.Referenceable, object):
         super(BrowserRequestDownloader, self).__init__()
         self.crawler = crawler
         self.crawler.signals.connect(self._handle_request_dropped,
-                                     request_dropped)
+                                     signals.request_dropped)
 
     @staticmethod
     def _handle_request_dropped(request):
         if request.meta.get('from_browser', False):
-            # TODO: log error.
-            # logging.error(("Request {!r} from browser dropped by Scrapy "
-            #                "scheduler.").format(request))
-            # TODO: call request errback.
-            pass
+            logger.error(("Request {!r} for browser engine dropped by Scrapy "
+                          "scheduler.").format(request))
 
     def _make_scrapy_request(self, request_from_browser, callback, errback):
         headers = CaselessDict(request_from_browser.headers)
-        # Scrapy will set Content-Length afterwards when it is needed.
+        # Scrapy will set Content-Length if it is needed.
         headers.pop(b'Content-Length', None)
 
         # TODO: allow user to set a key on parent request and set it on all
