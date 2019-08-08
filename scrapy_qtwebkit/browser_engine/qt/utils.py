@@ -3,7 +3,6 @@ import logging
 import time
 
 from PyQt5.QtWebKit import QWebElement, QWebElementCollection
-from twisted.internet import reactor
 from twisted.internet.defer import (Deferred, inlineCallbacks, maybeDeferred,
                                     returnValue)
 
@@ -40,7 +39,7 @@ class ElementDidNotAppear(Exception):
 
 
 @inlineCallbacks
-def wait_for_element(func, *args, **kwargs):
+def wait_for_element(reactor, func, *args, **kwargs):
     interval = kwargs.pop('interval', 1)
     timeout = kwargs.pop('timeout', 30)
     log = kwargs.pop('log', logger.debug)

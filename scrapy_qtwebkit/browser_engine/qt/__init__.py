@@ -17,6 +17,23 @@ from .page import CustomQWebPage
 from .utils import deferred_for_qt_signal
 
 
+_qapp = None
+
+
+def _setup_pre_reactor():
+    global _qapp
+
+    import sys
+
+    import qt5reactor
+    from PyQt5.QtWidgets import QApplication
+
+    _qapp = QApplication.instance()
+    if not _qapp:
+        _qapp = QApplication(sys.argv)
+    qt5reactor.install()
+
+
 class BrowserManager(pb.Root):
     def remote_open_browser(self, downloader):
         return Browser(downloader)
