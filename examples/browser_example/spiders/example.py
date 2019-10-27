@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from scrapy import Spider
 from twisted.internet.defer import inlineCallbacks
 
