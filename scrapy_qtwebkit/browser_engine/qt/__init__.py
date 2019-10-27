@@ -4,7 +4,7 @@ from PyQt5.QtCore import QByteArray, QUrl
 from PyQt5.QtNetwork import (QNetworkAccessManager, QNetworkReply,
                              QNetworkRequest)
 from PyQt5.QtWebKit import QWebSettings
-from PyQt5.QtWebKitWidgets import QWebPage
+from PyQt5.QtWebKitWidgets import QWebPage, QWebView
 from twisted.internet.defer import inlineCallbacks
 from twisted.internet.error import (ConnectError, ConnectingCancelledError,
                                     ConnectionLost, ConnectionRefusedError,
@@ -16,6 +16,7 @@ from .http_methods import HTTP_METHOD_TO_QT_OPERATION
 from .nam import ScrapyNetworkAccessManager
 from .page import CustomQWebPage
 from .utils import deferred_for_qt_signal
+from .windows import window_types
 
 
 _qapp = None
@@ -36,18 +37,35 @@ def _setup_pre_reactor():
 
 
 class Browser(pb.Referenceable):
-    def __init__(self, downloader):
+    def __init__(self, downloader, global_options):
         super().__init__()
+        self.downloader = downloader
+        self.options = global_options
         QWebSettings.setObjectCacheCapacities(0, 0, 0)
         QWebSettings.setMaximumPagesInCache(0)
-        self.downloader = downloader
+        self._windows = None
+
+    def show_window(self, webpage):
+        if self._windows is None:
+            window_type = self.options.get('window_type', 'simple')
+            self._windows = window_types[window_type]()
+        webview = QWebView()
+        webview.setPage(webpage)
+        webpage.webview = webview
+        self._windows.add_webview(webview)
+
+    def remove_webview_window(self, webview):
+        self._windows.remove_webview(webview)
 
     def remote_create_webpage(self, options: dict):
-        # show_window = options.pop('show_window', False)
         qwebpage = CustomQWebPage()
         nam = ScrapyNetworkAccessManager(self.downloader, parent=qwebpage,
                                          **options)
         qwebpage.setNetworkAccessManager(nam)
+
+        if self.options.get('show_windows', False):
+            self.show_window(qwebpage)
+
         return WebPageRemoteControl(self, qwebpage)
 
 
@@ -60,8 +78,10 @@ class WebPageRemoteControl(pb.Referenceable):
         self._qwebpage = qwebpage
 
     def __del__(self):
-        # if self._qwebpage.webview is not None:
-        #     self._remove_webview_from_window(self._qwebpage.webview)
+        if self._qwebpage.webview is not None:
+            self.browser.remove_webview_window(self._qwebpage.webview)
+            self._qwebpage.webview.setPage(None)
+            self._qwebpage.webview = None
 
         # Resetting the main frame URL prevents it from making further requests,
         # which would cause Qt errors after the webpage is deleted.

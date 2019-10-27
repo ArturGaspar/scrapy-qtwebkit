@@ -133,18 +133,20 @@ class BrowserMiddleware(object):
             crawler,
             endpoint,
             page_limit=settings.getint('BROWSER_ENGINE_PAGE_LIMIT', 4),
+            browser_options=settings.getdict('BROWSER_ENGINE_OPTIONS'),
             cookies_middleware=cookies_mw,
         )
 
         return ext
 
     def __init__(self, crawler, client_endpoint, page_limit=4,
-                 cookies_middleware=None):
+                 browser_options=None, cookies_middleware=None):
         super().__init__()
         self._crawler = crawler
         self._client_endpoint = client_endpoint
 
         self.page_limit = page_limit
+        self.browser_options = (browser_options or {})
         self.cookies_mw = cookies_middleware
 
         self._downloader = None
@@ -171,7 +173,9 @@ class BrowserMiddleware(object):
             self._downloader = BrowserRequestDownloader(self._crawler)
 
         root = yield factory.getRootObject()
-        self._browser = yield root.callRemote('open_browser', self._downloader)
+        self._browser = yield root.callRemote('open_browser',
+                                              downloader=self._downloader,
+                                              options=self.browser_options)
 
     @inlineCallbacks
     def _get_browser(self):
