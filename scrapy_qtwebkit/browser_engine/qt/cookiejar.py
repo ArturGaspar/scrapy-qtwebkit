@@ -11,7 +11,7 @@ class CookielibQtCookieJar(QNetworkCookieJar):
     """Qt cookie jar for accessing Python cookielib cookies."""
 
     def __init__(self, cookiejar, parent=None):
-        super(CookielibQtCookieJar, self).__init__(parent)
+        super().__init__(parent)
         self._jar = cookiejar
 
     @staticmethod

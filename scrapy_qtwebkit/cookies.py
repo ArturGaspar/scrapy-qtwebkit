@@ -24,7 +24,7 @@ class CopyableCookie(Cookie, pb.Copyable, pb.RemoteCopy, object):
 
 class _CookieJarRemoteMethodCaller(pb.Referenceable, object):
     def __init__(self, cookiejar):
-        super(_CookieJarRemoteMethodCaller, self).__init__()
+        super().__init__()
         self._cookiejar = cookiejar
 
     def remote_set_cookie(self, changer_id, cookie):
@@ -36,7 +36,7 @@ class _CookieJarRemoteMethodCaller(pb.Referenceable, object):
 
 class RemotelyAccessbileCookieJar(CookieJar, pb.Cacheable, object):
     def __init__(self, policy=None):
-        super(RemotelyAccessbileCookieJar, self).__init__(policy=policy)
+        super().__init__(policy=policy)
         self._remote_method_caller = _CookieJarRemoteMethodCaller(self)
         self._observers = []
         self._last_changer = {}
@@ -44,14 +44,14 @@ class RemotelyAccessbileCookieJar(CookieJar, pb.Cacheable, object):
     def set_cookie(self, cookie, changer_id=None):
         if not isinstance(cookie, CopyableCookie):
             cookie = CopyableCookie.from_regular_cookie(cookie)
-        super(RemotelyAccessbileCookieJar, self).set_cookie(cookie)
+        super().set_cookie(cookie)
         self._notify_observers((cookie.domain, cookie.path, cookie.name),
                                changer_id, 'set_cookie', cookie)
 
     def clear(self, domain, path, name, changer_id=None):
         if domain is None or path is None or name is None:
             raise ValueError("domain, path and name must be given")
-        super(RemotelyAccessbileCookieJar, self).clear(domain, path, name)
+        super().clear(domain, path, name)
         self._notify_observers((domain, path, name), changer_id,
                                'delete_cookie', domain, path, name)
 
@@ -87,10 +87,10 @@ class RemoteCookieJar(CookieJar, pb.RemoteCache, object):
         self._cookies, self._jarmethods, self._observer_id = state
 
     def observe_set_cookie(self, cookie):
-        super(RemoteCookieJar, self).set_cookie(cookie)
+        super().set_cookie(cookie)
 
     def observe_delete_cookie(self, domain, path, name):
-        super(RemoteCookieJar, self).clear(domain, path, name)
+        super().clear(domain, path, name)
 
     def set_cookie(self, cookie):
         if not isinstance(cookie, CopyableCookie):

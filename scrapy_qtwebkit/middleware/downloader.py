@@ -24,7 +24,7 @@ class _BrowserDownloadRequest(Request):
 
 class BrowserRequestDownloader(pb.Referenceable, object):
     def __init__(self, crawler):
-        super(BrowserRequestDownloader, self).__init__()
+        super().__init__()
         self.crawler = crawler
         self.crawler.signals.connect(self._handle_request_dropped,
                                      signals.request_dropped)

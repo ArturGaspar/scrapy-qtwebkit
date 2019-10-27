@@ -41,17 +41,17 @@ class CustomQWebPage(QWebPage):
     _dummy_error = QWebPage.ErrorPageExtensionOption()
 
     def __init__(self, *args, **kwargs):
-        super(CustomQWebPage, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.webview = None
         self._current_error = None
         self.loadFinished.connect(self._on_load_finished)
-        self.loadStarted.connect(self.reset_curent_error)
+        self.loadStarted.connect(self.reset_current_error)
 
     def setNetworkAccessManager(self, nam):
-        super(CustomQWebPage, self).setNetworkAccessManager(nam)
+        super().setNetworkAccessManager(nam)
         self.networkAccessManager().finished.connect(self._on_network_reply)
 
-    def reset_curent_error(self):
+    def reset_current_error(self):
         self._current_error = None
 
     def _on_network_reply(self, reply):
@@ -71,12 +71,11 @@ class CustomQWebPage(QWebPage):
                                                    reply.rawHeaderPairs()))
 
     def _on_load_finished(self, ok):
-        # TODO: check if Qt accepts None instead of _dummy_error.
         error = self._current_error or self._dummy_error
         if error.domain == QWebPage.Http:
             ok = True
+        self.reset_current_error()
         self.loadFinishedWithError.emit(ok, error)
-        self.reset_curent_error()
 
     def extension(self, extension, option=None, output=None):
         if extension == QWebPage.ErrorPageExtension:
@@ -89,4 +88,4 @@ class CustomQWebPage(QWebPage):
         if extension == QWebPage.ErrorPageExtension:
             return True
 
-        return super(CustomQWebPage, self).supportsExtension(extension)
+        return super().supportsExtension(extension)

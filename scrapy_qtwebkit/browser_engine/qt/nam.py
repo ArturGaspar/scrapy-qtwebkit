@@ -73,7 +73,7 @@ class ScrapyNetworkReply(QNetworkReply):
     """A network reply object for a request made with Scrapy."""
 
     def __init__(self, nam):
-        super(ScrapyNetworkReply, self).__init__(nam)
+        super().__init__(nam)
         self.aborted = False
         self.content = BytesIO()
         self.open(QIODevice.ReadOnly)
@@ -137,7 +137,7 @@ class ScrapyNetworkReply(QNetworkReply):
         return failure
 
     def bytesAvailable(self):
-        return (super(ScrapyNetworkReply, self).bytesAvailable() +
+        return (super().bytesAvailable() +
                 (len(self.content.getvalue()) - self.content.tell()))
 
     def readData(self, size):
