@@ -88,6 +88,17 @@ class BrowserResponse(HtmlResponse):
         self._set_body(body)
 
 
+# Endpoints do not call ClientFactory.clientConnectionLost(), so do it here.
+class _PBBrokerForEndpoint(pb.Broker):
+    def connectionLost(self, reason):
+        super().connectionLost(reason)
+        self.factory.clientConnectionLost(None, reason)
+
+    def connectionFailed(self):
+        super().connectionFailed()
+        self.factory.clientConnectionFailed(None, None)
+
+
 class BrowserMiddleware(object):
     @classmethod
     def from_crawler(cls, crawler):
@@ -151,20 +162,15 @@ class BrowserMiddleware(object):
             return
 
         factory = pb.PBClientFactory(security=jelly.DummySecurityOptions())
+        factory.protocol = _PBBrokerForEndpoint
         broker = yield self._client_endpoint.connect(factory)
         if isinstance(self._client_endpoint, ProcessEndpoint):
             atexit.register(broker.transport.signalProcess, "TERM")
 
-        # Endpoints do not call ClientFactory.clientConnectionLost(), so the
-        # factory never calls back its own getRootObject() deferreds when an
-        # error happens.
-        root_dfd = factory.getRootObject()
-        broker.notifyOnDisconnect(partial(root_dfd.errback, ConnectionLost()))
-        root = yield root_dfd
-
         if self._downloader is None:
             self._downloader = BrowserRequestDownloader(self._crawler)
 
+        root = yield factory.getRootObject()
         self._browser = yield root.callRemote('open_browser', self._downloader)
 
     @inlineCallbacks
