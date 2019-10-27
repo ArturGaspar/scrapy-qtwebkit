@@ -78,14 +78,14 @@ class WebPageRemoteControl(pb.Referenceable):
         self._qwebpage = qwebpage
 
     def __del__(self):
+        # Resetting the main frame URL prevents it from making further requests,
+        # which would cause Qt errors after the webpage is deleted.
+        self._qwebpage.mainFrame().setUrl(QUrl())
+
         if self._qwebpage.webview is not None:
             self.browser.remove_webview_window(self._qwebpage.webview)
             self._qwebpage.webview.setPage(None)
             self._qwebpage.webview = None
-
-        # Resetting the main frame URL prevents it from making further requests,
-        # which would cause Qt errors after the webpage is deleted.
-        self._qwebpage.mainFrame().setUrl(QUrl())
 
     @staticmethod
     def _make_qt_request(request: RequestFromScrapy):
