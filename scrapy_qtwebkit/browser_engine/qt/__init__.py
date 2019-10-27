@@ -38,9 +38,8 @@ def _setup_pre_reactor():
 class Browser(pb.Referenceable):
     def __init__(self, downloader):
         super().__init__()
-        qwebsettings = QWebSettings.globalSettings()
-        qwebsettings.setObjectCacheCapacities(0, 0, 0)
-        qwebsettings.setMaximumPagesInCache(0)
+        QWebSettings.setObjectCacheCapacities(0, 0, 0)
+        QWebSettings.setMaximumPagesInCache(0)
         self.downloader = downloader
 
     def remote_create_webpage(self, options: dict):
