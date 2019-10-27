@@ -1,15 +1,17 @@
 """Scrapy side."""
 
 import atexit
-import sys
 import logging
+import sys
 from functools import partial
 
 from scrapy.exceptions import NotConfigured, NotSupported
 from scrapy.http import HtmlResponse, Request
+from scrapy.selector import Selector
 
 from twisted.internet import reactor
-from twisted.internet.defer import DeferredLock, inlineCallbacks
+from twisted.internet.defer import (DeferredLock, DeferredSemaphore,
+                                    inlineCallbacks)
 from twisted.internet.endpoints import ProcessEndpoint, clientFromString
 from twisted.internet.error import ConnectionLost
 from twisted.python.failure import Failure
@@ -18,7 +20,8 @@ from twisted.spread import jelly, pb
 from .._intermediaries import RequestFromScrapy, ScrapyNotSupported
 from .cookies import RemotelyAccessbileCookiesMiddleware
 from .downloader import BrowserRequestDownloader
-from .utils import PbReferenceMethodsWrapper
+from .utils import (DummySemaphore, PBBrokerForEndpoint,
+                    PBReferenceMethodsWrapper)
 
 
 __all__ = ['BrowserMiddleware']
@@ -87,16 +90,8 @@ class BrowserResponse(HtmlResponse):
         self._encoding = encoding
         self._set_body(body)
 
-
-# Endpoints do not call ClientFactory.clientConnectionLost(), so do it here.
-class _PBBrokerForEndpoint(pb.Broker):
-    def connectionLost(self, reason):
-        super().connectionLost(reason)
-        self.factory.clientConnectionLost(None, reason)
-
-    def connectionFailed(self):
-        super().connectionFailed()
-        self.factory.clientConnectionFailed(None, None)
+    def close_webpage(self):
+        self.webpage = None
 
 
 class BrowserMiddleware(object):
@@ -144,8 +139,11 @@ class BrowserMiddleware(object):
         super().__init__()
         self._crawler = crawler
         self._client_endpoint = client_endpoint
+        if page_limit:
+            self._semaphore = DeferredSemaphore(page_limit)
+        else:
+            self._semaphore = DummySemaphore()
 
-        self.page_limit = page_limit
         self.browser_options = (browser_options or {})
         self.cookies_mw = cookies_middleware
 
@@ -164,7 +162,7 @@ class BrowserMiddleware(object):
             return
 
         factory = pb.PBClientFactory(security=jelly.DummySecurityOptions())
-        factory.protocol = _PBBrokerForEndpoint
+        factory.protocol = PBBrokerForEndpoint
         broker = yield self._client_endpoint.connect(factory)
         if isinstance(self._client_endpoint, ProcessEndpoint):
             atexit.register(broker.transport.signalProcess, "TERM")
@@ -190,8 +188,8 @@ class BrowserMiddleware(object):
             yield self.cookies_mw.process_request(request, spider)
 
         if isinstance(request, BrowserRequest):
-            response_dfd = self._make_browser_request(request, spider)
-            return (yield response_dfd)
+            response = yield self._make_browser_request(request, spider)
+            return response
 
     def process_response(self, request, response, spider):
         if self.cookies_mw:
@@ -213,7 +211,15 @@ class BrowserMiddleware(object):
             webpage_options['cookiejarkey'] = cookiejarkey
             webpage_options['cookiejar'] = cookiejar
 
-        webpage = yield browser.callRemote('create_webpage', webpage_options)
+        yield self._semaphore.acquire()
+        try:
+            webpage = yield browser.callRemote('create_webpage',
+                                               webpage_options)
+        except:
+            self._semaphore.release()
+            raise
+        else:
+            weakref.finalize(webpage, self._semaphore.release)
 
         result = webpage.callRemote('load_request',
                                     RequestFromScrapy(request.url,
@@ -221,6 +227,7 @@ class BrowserMiddleware(object):
                                                       request.headers,
                                                       request.body))
         result.addCallback(partial(self._handle_page_load, request, webpage))
+        del webpage
         return (yield result)
 
     @inlineCallbacks
@@ -233,18 +240,18 @@ class BrowserMiddleware(object):
 
         """
 
+        browser_response = request.meta.get('browser_response', False)
+
         try:
             ok, status, headers, exc = load_result
 
             if ok:
-                url = yield webpage.callRemote('get_url')
-
-                browser_response = request.meta.get('browser_response', False)
                 if browser_response:
                     respcls = BrowserResponse
                 else:
                     respcls = HtmlResponse
 
+                url = yield webpage.callRemote('get_url')
                 encoding, body = yield webpage.callRemote('get_body')
                 response = respcls(status=status,
                                    url=url,
@@ -254,7 +261,7 @@ class BrowserMiddleware(object):
                                    request=request)
 
                 if browser_response:
-                    response.webpage = PbReferenceMethodsWrapper(webpage)
+                    response.webpage = PBReferenceMethodsWrapper(webpage)
 
             else:
                 if isinstance(exc, ScrapyNotSupported):
@@ -263,5 +270,18 @@ class BrowserMiddleware(object):
 
         except Exception as err:
             response = Failure(err)
+        finally:
+            # There should be one reference from this same scope, plus, in case
+            # it was set, one from the response (actually from the
+            # PBReferenceMethodsWrapper).
+            expected_refcount = 1
+            if browser_response:
+                expected_refcount += 1
+            refcount = sys.getrefcount(webpage) - 1
+            if refcount != expected_refcount:
+                logger.error(f"Expected {expected_refcount} references to "
+                             f"{webpage!r} but found {refcount}:\n"
+                             "\n".join(map(repr, gc.get_referrers(webpage))))
+            del webpage
 
         return response
