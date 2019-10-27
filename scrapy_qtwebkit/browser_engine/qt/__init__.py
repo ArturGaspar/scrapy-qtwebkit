@@ -3,6 +3,7 @@
 from PyQt5.QtCore import QByteArray, QUrl
 from PyQt5.QtNetwork import (QNetworkAccessManager, QNetworkReply,
                              QNetworkRequest)
+from PyQt5.QtWebKit import QWebSettings
 from PyQt5.QtWebKitWidgets import QWebPage
 from twisted.internet.defer import inlineCallbacks
 from twisted.internet.error import (ConnectError, ConnectingCancelledError,
@@ -34,14 +35,12 @@ def _setup_pre_reactor():
     qt5reactor.install()
 
 
-class BrowserManager(pb.Root):
-    def remote_open_browser(self, downloader):
-        return Browser(downloader)
-
-
 class Browser(pb.Referenceable):
     def __init__(self, downloader):
         super().__init__()
+        qwebsettings = QWebSettings.globalSettings()
+        qwebsettings.setObjectCacheCapacities(0, 0, 0)
+        qwebsettings.setMaximumPagesInCache(0)
         self.downloader = downloader
 
     def remote_create_webpage(self, options: dict):
@@ -110,13 +109,12 @@ class WebPageRemoteControl(pb.Referenceable):
         headers = {}
         exc = None
 
-        if error:
+        if not ok:
             self._url = error.url
             if error.domain == QWebPage.Http:
                 ok = True
                 status = error.error
             else:
-                ok = False
                 if error.domain == QWebPage.QtNetwork:
                     exc_cls = self.qt_error_exc_mapping.get(error.error,
                                                             ConnectError)
