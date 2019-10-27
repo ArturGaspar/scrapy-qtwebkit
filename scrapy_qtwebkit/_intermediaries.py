@@ -27,7 +27,7 @@ class ResponseFromScrapy(Copyable, object):
         super().__init__()
         self.url = url
         self.status = status
-        self.headers = headers
+        self.headers = dict(headers)
         self.body = body
 
 

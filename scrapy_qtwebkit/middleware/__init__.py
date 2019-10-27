@@ -214,7 +214,7 @@ class BrowserMiddleware(object):
         result = webpage.callRemote('load_request',
                                     RequestFromScrapy(request.url,
                                                       request.method,
-                                                      dict(request.headers),
+                                                      request.headers,
                                                       request.body))
         result.addCallback(partial(self._handle_page_load, request, webpage))
         return (yield result)
