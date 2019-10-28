@@ -1,5 +1,3 @@
-# sudo docker build -t scrapy-qtwebkit . && sudo docker run -p 8000:8000 scrapy-qtwebkit
-
 FROM debian:buster-slim
 
 RUN apt-get update
