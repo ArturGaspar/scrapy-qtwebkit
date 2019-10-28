@@ -3,7 +3,6 @@
 import atexit
 import logging
 import sys
-import weakref
 from functools import partial
 
 from scrapy.exceptions import NotConfigured, NotSupported
