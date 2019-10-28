@@ -22,6 +22,16 @@ class DefaultWeakKeyDict(weakref.WeakKeyDictionary):
 
 
 class BrowserResponseTrackerMiddleware(object):
+    """
+
+    Tracks if browser responses are kept by the user in subsequent requests,
+    and closes them when not.
+
+    """
+
+    # Weak references are used so as not to keep a browser page open if the user
+    # deletes the response before returning from the callback.
+
     def __init__(self):
         super().__init__()
         self._responses_with_user = DefaultWeakKeyDict(int)
@@ -48,9 +58,9 @@ class BrowserResponseTrackerMiddleware(object):
         if isinstance(response, BrowserResponse):
             # Add 1 when the response is sent from Scrapy (expected to happen
             # once, at the first time the response is seen).
-            # If it is not given to Scrapy by the user, it will go back to 0;
-            # else, it will stay at +1, but will go to 0 once the user
-            # receives it again but does not send it back.
+            # If it is not given to Scrapy (e.g. in request meta) by the user,
+            # it will go back to 0; otherwise, it will stay at +1, but will go
+            # to 0 once the user receives it again and does not send it back.
             self._responses_with_scrapy[response] += 1
             in_responses.add(response)
         in_responses.update(self._get_browser_responses(response.meta))
@@ -84,7 +94,7 @@ class BrowserResponseTrackerMiddleware(object):
                 logger.info(f"Closing webpage in response {response!r}")
                 response.close_webpage()
             else:
-                logger.info(f"Not closing webpage in response {response!r}, "
-                            f"held by Scrapy {scrapy_count} times and by user "
-                            f"{user_count} times")
+                logger.debug(f"Not closing webpage in response {response!r}, "
+                             f"held by Scrapy {scrapy_count} times and by user "
+                             f"{user_count} times")
             del response
