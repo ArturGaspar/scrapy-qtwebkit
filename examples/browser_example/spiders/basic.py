@@ -5,12 +5,15 @@ from scrapy_qtwebkit.middleware import BrowserRequest
 
 
 class ExampleSpider(Spider):
-    name = 'example'
+    """Requests example.com and changes the page title with Javascript."""
+
+    name = 'basic'
     allowed_domains = ['example.com']
 
     def start_requests(self):
         yield BrowserRequest("https://example.com/",
-                             meta={'browser_response': True})
+                             meta={'browser_response': True},
+                             dont_filter=True)
 
     @inlineCallbacks
     def parse(self, response):
