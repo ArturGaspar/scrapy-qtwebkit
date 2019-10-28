@@ -3,95 +3,32 @@
 import atexit
 import logging
 import sys
+import weakref
 from functools import partial
 
 from scrapy.exceptions import NotConfigured, NotSupported
-from scrapy.http import HtmlResponse, Request
-from scrapy.selector import Selector
 
 from twisted.internet import reactor
 from twisted.internet.defer import (DeferredLock, DeferredSemaphore,
                                     inlineCallbacks)
 from twisted.internet.endpoints import ProcessEndpoint, clientFromString
-from twisted.internet.error import ConnectionLost
 from twisted.python.failure import Failure
 from twisted.spread import jelly, pb
 
 from .._intermediaries import RequestFromScrapy, ScrapyNotSupported
 from .cookies import RemotelyAccessbileCookiesMiddleware
 from .downloader import BrowserRequestDownloader
+from .http import BrowserRequest, BrowserResponse
+from .spidermw import BrowserResponseTrackerMiddleware
 from .utils import (DummySemaphore, PBBrokerForEndpoint,
                     PBReferenceMethodsWrapper)
 
 
-__all__ = ['BrowserMiddleware']
+__all__ = ['BrowserMiddleware', 'BrowserRequest',
+           'BrowserResponseTrackerMiddleware']
 
 
 logger = logging.getLogger(__name__)
-
-
-class BrowserRequest(Request):
-    """
-
-    A request to be handled by the browser. May be provided either an URL to
-    open a new webpage for, or an existing webpage object to continue
-    processing in the callback.
-
-    The latter option is useful for producing items or requests, while keeping
-    the page open for further processing.
-
-    """
-
-    _engine = None
-
-    def __init__(self, url=None, webpage=None, *args, **kwargs):
-        if webpage:
-            if url:
-                raise TypeError("must not provide both url and webpage")
-            url = "about:blank"
-        elif not url:
-            raise TypeError("must provide either url or webpage")
-        self.webpage = webpage
-        # kwargs.setdefault('dont_filter', True)
-        self.actual_requests = 0
-        super().__init__(url, *args, **kwargs)
-
-    def __repr__(self):
-        return ("<Browser {} page {} (with {} requests)>"
-                ).format(self._engine, self.url, self.actual_requests)
-
-    def __str__(self):
-        return repr(self)
-
-    def replace(self, *args, **kwargs):
-        webpage = kwargs.setdefault('webpage', self.webpage)
-        if webpage is not None:
-            kwargs['url'] = None
-
-        return super().replace(*args, **kwargs)
-
-
-class _RequestCountRemoteIncreaser(pb.Referenceable):
-    def __init__(self, request):
-        super().__init__()
-        self._browser_request = request
-
-    def remote_increase_request_count(self, num_requests=1):
-        self._browser_request.actual_requests += num_requests
-
-
-class BrowserResponse(HtmlResponse):
-    @inlineCallbacks
-    def update_body(self):
-        encoding, body = yield self.webpage.callRemote('get_body')
-        self._cached_benc = None
-        self._cached_ubody = None
-        self._cached_selector = None
-        self._encoding = encoding
-        self._set_body(body)
-
-    def close_webpage(self):
-        self.webpage = None
 
 
 class BrowserMiddleware(object):
@@ -201,25 +138,22 @@ class BrowserMiddleware(object):
     def _make_browser_request(self, request, spider):
         browser = yield self._get_browser()
 
-        webpage_options = {
-            'count_increaser': _RequestCountRemoteIncreaser(request),
+        options = {
+            'remote_request_counter': request.remote_counter,
             'user_agent': request.headers.get('User-Agent')
         }
         if self.cookies_mw and 'dont_merge_cookies' not in request.meta:
             cookiejarkey = request.meta.get("cookiejar")
             cookiejar = self.cookies_mw.jars[cookiejarkey].jar
-            webpage_options['cookiejarkey'] = cookiejarkey
-            webpage_options['cookiejar'] = cookiejar
+            options['cookiejarkey'] = cookiejarkey
+            options['cookiejar'] = cookiejar
 
         yield self._semaphore.acquire()
         try:
-            webpage = yield browser.callRemote('create_webpage',
-                                               webpage_options)
+            webpage = yield browser.callRemote('create_webpage', options)
         except:
             self._semaphore.release()
             raise
-        else:
-            weakref.finalize(webpage, self._semaphore.release)
 
         result = webpage.callRemote('load_request',
                                     RequestFromScrapy(request.url,
@@ -261,7 +195,8 @@ class BrowserMiddleware(object):
                                    request=request)
 
                 if browser_response:
-                    response.webpage = PBReferenceMethodsWrapper(webpage)
+                    response._webpage = PBReferenceMethodsWrapper(webpage)
+                    response._semaphore = self._semaphore
 
             else:
                 if isinstance(exc, ScrapyNotSupported):
@@ -270,18 +205,11 @@ class BrowserMiddleware(object):
 
         except Exception as err:
             response = Failure(err)
-        finally:
-            # There should be one reference from this same scope, plus, in case
-            # it was set, one from the response (actually from the
-            # PBReferenceMethodsWrapper).
-            expected_refcount = 1
-            if browser_response:
-                expected_refcount += 1
-            refcount = sys.getrefcount(webpage) - 1
-            if refcount != expected_refcount:
-                logger.error(f"Expected {expected_refcount} references to "
-                             f"{webpage!r} but found {refcount}:\n"
-                             "\n".join(map(repr, gc.get_referrers(webpage))))
-            del webpage
+
+        if not browser_response:
+            try:
+                yield webpage.callRemote('close')
+            finally:
+                self._semaphore.release()
 
         return response

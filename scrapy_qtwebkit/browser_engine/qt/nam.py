@@ -17,20 +17,21 @@ from .http_methods import QT_OPERATION_TO_HTTP_METHOD
 
 
 class ScrapyNetworkAccessManager(QNetworkAccessManager):
-    def __init__(self, remote_downloader, user_agent=None, count_increaser=None,
-                 cookiejarkey=None, cookiejar=None, parent=None):
+    def __init__(self, remote_downloader, user_agent=None,
+                 remote_request_counter=None, cookiejarkey=None,
+                 cookiejar=None, parent=None):
         super().__init__(parent)
         self.remote_downloader = remote_downloader
         self.user_agent = user_agent
-        self.count_increaser = count_increaser
+        self.remote_request_counter = remote_request_counter
         self.cookiejarkey = cookiejarkey
         if cookiejar is not None:
             self.setCookieJar(CookielibQtCookieJar(cookiejar))
         self._had_requests = False
 
     def createRequest(self, operation, request, device=None):
-        if self.count_increaser:
-            self.count_increaser.callRemote('increase_request_count', 1)
+        if self.remote_request_counter:
+            self.remote_request_counter.callRemote('increase_request_count', 1)
 
         reply = ScrapyNetworkReply(self)
         reply.setRequest(request)
