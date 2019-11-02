@@ -45,16 +45,14 @@ class BrowserResponse(HtmlResponse):
 
     @property
     def webpage(self):
-        webpage = self._webpage
-        if webpage is None:
+        if self._webpage is None:
             raise ValueError("cannot access response webpage after closing")
-        return webpage
+        return self._webpage
 
     def close_webpage(self):
-        webpage = self._webpage
-        self._webpage = None
-        if webpage:
-            dfd_close = webpage.callRemote('close')
+        if self._webpage:
+            dfd_close = self._webpage.callRemote('close')
+            self._webpage = None
 
             semaphore = self._semaphore
             self._semaphore = None

@@ -6,6 +6,7 @@ import sys
 from functools import partial
 
 from scrapy.exceptions import NotConfigured, NotSupported
+from scrapy.http import HtmlResponse
 
 from twisted.internet import reactor
 from twisted.internet.defer import (DeferredLock, DeferredSemaphore,
@@ -19,8 +20,7 @@ from .cookies import RemotelyAccessbileCookiesMiddleware
 from .downloader import BrowserRequestDownloader
 from .http import BrowserRequest, BrowserResponse
 from .spidermw import BrowserResponseTrackerMiddleware
-from .utils import (DummySemaphore, PBBrokerForEndpoint,
-                    PBReferenceMethodsWrapper)
+from .utils import DummySemaphore, PBReferenceMethodsWrapper
 
 
 __all__ = ['BrowserMiddleware', 'BrowserRequest',
@@ -47,18 +47,23 @@ class BrowserMiddleware(object):
             cookies_mw = None
 
         server = settings.get('BROWSER_ENGINE_SERVER')
+        start_server = settings.getbool('BROWSER_ENGINE_START_SERVER', False)
+
+        if not (server or start_server):
+            raise NotConfigured("Must specify either BROWSER_ENGINE_SERVER or "
+                                "BROWSER_ENGINE_START_SERVER")
+        if server and start_server:
+            raise NotConfigured("Must not specify both BROWSER_ENGINE_SERVER "
+                                "and BROWSER_ENGINE_START_SERVER=True")
+
         if server:
             endpoint = clientFromString(reactor, server)
         else:
-            if settings.getbool('BROWSER_ENGINE_START_SERVER', False):
-                # Twisted logs the process's stderr with INFO level.
-                logging.getLogger("twisted").setLevel(logging.INFO)
-                argv = [sys.executable, "-m",
-                        "scrapy_qtwebkit.browser_engine", "stdio"]
-                endpoint = ProcessEndpoint(reactor, argv[0], argv, env=None)
-            else:
-                raise NotConfigured("Must provide either BROWSER_ENGINE_SERVER "
-                                    "or BROWSER_ENGINE_START_SERVER")
+            # Twisted logs the process's stderr with INFO level.
+            logging.getLogger("twisted").setLevel(logging.INFO)
+            argv = [sys.executable,
+                    "-m", "scrapy_qtwebkit.browser_engine", "stdio"]
+            endpoint = ProcessEndpoint(reactor, argv[0], argv, env=None)
 
         ext = cls(
             crawler,
@@ -83,7 +88,7 @@ class BrowserMiddleware(object):
         self.browser_options = (browser_options or {})
         self.cookies_mw = cookies_middleware
 
-        self._downloader = None
+        self._downloader = BrowserRequestDownloader(self._crawler)
         self._browser = None
         self._browser_init_lock = DeferredLock()
 
@@ -98,15 +103,21 @@ class BrowserMiddleware(object):
             return
 
         factory = pb.PBClientFactory(security=jelly.DummySecurityOptions())
-        factory.protocol = PBBrokerForEndpoint
         broker = yield self._client_endpoint.connect(factory)
+
         if isinstance(self._client_endpoint, ProcessEndpoint):
             atexit.register(broker.transport.signalProcess, "TERM")
 
-        if self._downloader is None:
-            self._downloader = BrowserRequestDownloader(self._crawler)
-
-        root = yield factory.getRootObject()
+        # The endpoint does not call clientConnectionLost() on the factory
+        # given to it. PBClientFactory relies on this method being called to
+        # fail pending getRootObject() requests, thus a failed connection would
+        # not cause the failure of getRootObject(), which would hang forever.
+        #
+        # Broker.remoteForName() synchronously returns a RemoteReference whose
+        # calls will fail asynchronously if the broker loses connection, as the
+        # broker (which is a Protocol) is properly notified by the endpoint,
+        # which does call broker.connectionLost().
+        root = broker.remoteForName("root")
         self._browser = yield root.callRemote('open_browser',
                                               downloader=self._downloader,
                                               options=self.browser_options)
@@ -124,7 +135,7 @@ class BrowserMiddleware(object):
             yield self.cookies_mw.process_request(request, spider)
 
         if isinstance(request, BrowserRequest):
-            response = yield self._make_browser_request(request, spider)
+            response = yield self._make_browser_request(request)
             return response
 
     def process_response(self, request, response, spider):
@@ -134,7 +145,7 @@ class BrowserMiddleware(object):
             return response
 
     @inlineCallbacks
-    def _make_browser_request(self, request, spider):
+    def _make_browser_request(self, request):
         browser = yield self._get_browser()
 
         options = {
@@ -164,15 +175,7 @@ class BrowserMiddleware(object):
         return (yield result)
 
     @inlineCallbacks
-    def _handle_page_load(self, request, webpage,
-                          load_result=(True, 200, None, None)):
-        """
-
-        Handle a request for a web page, either a page load or a request to
-        continue using an existing page object.
-
-        """
-
+    def _handle_page_load(self, request, webpage, load_result):
         browser_response = request.meta.get('browser_response', False)
 
         try:
@@ -203,12 +206,14 @@ class BrowserMiddleware(object):
                 raise exc
 
         except Exception as err:
+            browser_response = False
             response = Failure(err)
 
-        if not browser_response:
-            try:
-                yield webpage.callRemote('close')
-            finally:
-                self._semaphore.release()
+        finally:
+            if not browser_response:
+                try:
+                    yield webpage.callRemote('close')
+                finally:
+                    self._semaphore.release()
 
         return response
