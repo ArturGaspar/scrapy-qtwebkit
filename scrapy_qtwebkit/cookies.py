@@ -34,7 +34,7 @@ class _CookieJarRemoteMethodCaller(pb.Referenceable, object):
         self._cookiejar.clear(domain, path, name, change_id=changer_id)
 
 
-class RemotelyAccessbileCookieJar(CookieJar, pb.Cacheable, object):
+class RemotelyAccessibleCookieJar(CookieJar, pb.Cacheable, object):
     def __init__(self, policy=None):
         super().__init__(policy=policy)
         self._remote_method_caller = _CookieJarRemoteMethodCaller(self)

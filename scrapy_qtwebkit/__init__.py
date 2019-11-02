@@ -1,6 +1,6 @@
 from twisted.spread import pb
 
-from .cookies import RemoteCookieJar, RemotelyAccessbileCookieJar
+from .cookies import RemoteCookieJar, RemotelyAccessibleCookieJar
 
 
-pb.setUnjellyableForClass(RemotelyAccessbileCookieJar, RemoteCookieJar)
+pb.setUnjellyableForClass(RemotelyAccessibleCookieJar, RemoteCookieJar)

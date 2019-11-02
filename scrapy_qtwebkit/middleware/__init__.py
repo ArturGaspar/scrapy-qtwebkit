@@ -16,7 +16,7 @@ from twisted.python.failure import Failure
 from twisted.spread import jelly, pb
 
 from .._intermediaries import RequestFromScrapy, ScrapyNotSupported
-from .cookies import RemotelyAccessbileCookiesMiddleware
+from .cookies import RemotelyAccessibleCookiesMiddleware
 from .downloader import BrowserRequestDownloader
 from .http import BrowserRequest, BrowserResponse
 from .spidermw import BrowserResponseTrackerMiddleware
@@ -40,7 +40,7 @@ class BrowserMiddleware(object):
                 logger.warning("Default cookies middleware enabled together "
                                "with browser engine aware cookies middleware. "
                                "Set COOKIES_ENABLED to False.")
-            cookies_mw = RemotelyAccessbileCookiesMiddleware(
+            cookies_mw = RemotelyAccessibleCookiesMiddleware(
                 debug=crawler.settings.getbool('COOKIES_DEBUG')
             )
         else:
