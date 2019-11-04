@@ -36,7 +36,7 @@ else:
     server_endpoint = serverFromString(reactor, args.address)
 
 server_factory = pb.PBServerFactory(
-    BrowserManager(browser_engine.Browser),
+    BrowserManager(reactor, browser_engine.Browser),
     unsafeTracebacks=True,
     security=jelly.DummySecurityOptions()
 )

@@ -37,8 +37,9 @@ def _setup_pre_reactor():
 
 
 class Browser(pb.Referenceable):
-    def __init__(self, downloader, global_options):
+    def __init__(self, reactor, downloader, global_options):
         super().__init__()
+        self._reactor = reactor
         self.downloader = downloader
         self.options = global_options
         QWebSettings.setObjectCacheCapacities(0, 0, 0)
