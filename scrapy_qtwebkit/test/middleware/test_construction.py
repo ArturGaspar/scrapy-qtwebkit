@@ -5,7 +5,7 @@ from twisted.internet import reactor
 from twisted.internet.defer import DeferredSemaphore
 
 from scrapy_qtwebkit.middleware.cookies import (
-    RemotelyAccessbileCookiesMiddleware
+    RemotelyAccessibleCookiesMiddleware
 )
 from scrapy_qtwebkit.middleware.utils import DummySemaphore
 
@@ -19,14 +19,14 @@ class MiddlewareConstructionTest(MiddlewareTest):
             'BROWSER_ENGINE_COOKIES_ENABLED': True,
             'BROWSER_ENGINE_SERVER': 'tcp:localhost:8000'
         })
-        assert isinstance(mw.cookies_mw, RemotelyAccessbileCookiesMiddleware)
+        assert isinstance(mw.cookies_mw, RemotelyAccessibleCookiesMiddleware)
 
         mw = self.make_middleware({
             'COOKIES_ENABLED': True,
             'BROWSER_ENGINE_COOKIES_ENABLED': True,
             'BROWSER_ENGINE_SERVER': 'tcp:localhost:8000'
         })
-        assert isinstance(mw.cookies_mw, RemotelyAccessbileCookiesMiddleware)
+        assert isinstance(mw.cookies_mw, RemotelyAccessibleCookiesMiddleware)
 
         mw = self.make_middleware({
             'COOKIES_ENABLED': True,
