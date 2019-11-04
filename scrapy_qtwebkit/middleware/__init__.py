@@ -20,7 +20,8 @@ from .cookies import RemotelyAccessibleCookiesMiddleware
 from .downloader import BrowserRequestDownloader
 from .http import BrowserRequest, BrowserResponse
 from .spidermw import BrowserResponseTrackerMiddleware
-from .utils import DummySemaphore, PBReferenceMethodsWrapper
+from .utils import (DummySemaphore, PBBrokerForEndpoint,
+                    PBReferenceMethodsWrapper)
 
 
 __all__ = ['BrowserMiddleware', 'BrowserRequest',
@@ -102,22 +103,22 @@ class BrowserMiddleware(object):
         if self._browser is not None:
             return
 
+        # The endpoint does not call the factory's clientConnectionLost()
+        # method. PBClientFactory relies on this method being called in order
+        # to fail pending getRootObject() requests, thus a failed connection
+        # would not cause the failure of getRootObject(), which would hang
+        # forever.
+        # The endpoint does call the protocol's connectionLost(), so a protocol
+        # that calls the factory's clientConnectionLost() seems to solve this
+        # problem.
         factory = pb.PBClientFactory(security=jelly.DummySecurityOptions())
+        factory.protocol = PBBrokerForEndpoint
         broker = yield self._client_endpoint.connect(factory)
 
         if isinstance(self._client_endpoint, ProcessEndpoint):
             atexit.register(broker.transport.signalProcess, "TERM")
 
-        # The endpoint does not call clientConnectionLost() on the factory
-        # given to it. PBClientFactory relies on this method being called to
-        # fail pending getRootObject() requests, thus a failed connection would
-        # not cause the failure of getRootObject(), which would hang forever.
-        #
-        # Broker.remoteForName() synchronously returns a RemoteReference whose
-        # calls will fail asynchronously if the broker loses connection, as the
-        # broker (which is a Protocol) is properly notified by the endpoint,
-        # which does call broker.connectionLost().
-        root = broker.remoteForName("root")
+        root = yield factory.getRootObject()
         self._browser = yield root.callRemote('open_browser',
                                               downloader=self._downloader,
                                               options=self.browser_options)

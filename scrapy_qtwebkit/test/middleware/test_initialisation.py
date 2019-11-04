@@ -15,6 +15,7 @@ class MiddlewareInitialisationTest(MiddlewareTest):
                                               'PBClientFactory')
         self.mock_factorycls = self._patcher_PBClientFactory.start()
         self.mock_factory = self.mock_factorycls.return_value
+        self.mock_root = self.mock_factory.getRootObject.return_value
 
     def tearDown(self):
         super().tearDown()
@@ -36,17 +37,13 @@ class MiddlewareInitialisationTest(MiddlewareTest):
 
         self.mock_endpoint.connect.assert_called_with(self.mock_factory)
 
-        mock_broker = self.mock_endpoint.connect.return_value
-        mock_broker.remoteForName.assert_called_with("root")
-
-        mock_root = mock_broker.remoteForName.return_value
-        mock_root.callRemote.assert_called_with(
+        self.mock_root.callRemote.assert_called_with(
             'open_browser',
             downloader=mw._downloader,
             options=test_options
         )
 
-        mock_browser = mock_root.callRemote.return_value
+        mock_browser = self.mock_root.callRemote.return_value
         assert mw._browser == mock_browser
 
     @inlineCallbacks
@@ -68,9 +65,7 @@ class MiddlewareInitialisationTest(MiddlewareTest):
             'BROWSER_ENGINE_SERVER': 'tcp:localhost:8000',
         })
 
-        mock_broker = self.mock_endpoint.connect.return_value
-        mock_root = mock_broker.remoteForName.return_value
-        mock_root.callRemote.return_value = fail(PBConnectionLost())
+        self.mock_root.callRemote.return_value = fail(PBConnectionLost())
 
         with self.assertRaises(PBConnectionLost):
             yield mw._init_browser()

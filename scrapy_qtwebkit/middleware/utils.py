@@ -1,4 +1,5 @@
 from twisted.internet.defer import succeed
+from twisted.spread import pb
 
 
 class PBReferenceMethodsWrapper(object):
@@ -13,6 +14,17 @@ class PBReferenceMethodsWrapper(object):
             # Allows accessing remote methods by name (without remote_ prefix).
             value = self._pb_reference.remoteMethod(attr)
         return value
+
+
+# Endpoints do not call ClientFactory.clientConnectionLost(), so do it here.
+class PBBrokerForEndpoint(pb.Broker):
+    def connectionLost(self, reason):
+        super().connectionLost(reason)
+        self.factory.clientConnectionLost(None, reason)
+
+    def connectionFailed(self):
+        super().connectionFailed()
+        self.factory.clientConnectionFailed(None, None)
 
 
 class DummySemaphore(object):
