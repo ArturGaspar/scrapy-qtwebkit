@@ -1,10 +1,10 @@
 """Scrapy side."""
 
-import atexit
 import logging
 import sys
 from functools import partial
 
+from scrapy import signals
 from scrapy.exceptions import NotConfigured, NotSupported
 from scrapy.http import HtmlResponse
 
@@ -66,15 +66,17 @@ class BrowserMiddleware(object):
                     "-m", "scrapy_qtwebkit.browser_engine", "stdio"]
             endpoint = ProcessEndpoint(reactor, argv[0], argv, env=None)
 
-        ext = cls(
+        mw = cls(
             crawler,
             endpoint,
             page_limit=settings.getint('BROWSER_ENGINE_PAGE_LIMIT', 4),
             browser_options=settings.getdict('BROWSER_ENGINE_OPTIONS'),
             cookies_middleware=cookies_mw,
         )
+        crawler.signals.connect(mw._engine_stopped,
+                                signal=signals.engine_stopped)
 
-        return ext
+        return mw
 
     def __init__(self, crawler, client_endpoint, page_limit=4,
                  browser_options=None, cookies_middleware=None):
@@ -113,15 +115,19 @@ class BrowserMiddleware(object):
         # problem.
         factory = pb.PBClientFactory(security=jelly.DummySecurityOptions())
         factory.protocol = PBBrokerForEndpoint
-        broker = yield self._client_endpoint.connect(factory)
-
-        if isinstance(self._client_endpoint, ProcessEndpoint):
-            atexit.register(broker.transport.signalProcess, "TERM")
+        yield self._client_endpoint.connect(factory)
 
         root = yield factory.getRootObject()
         self._browser = yield root.callRemote('open_browser',
                                               downloader=self._downloader,
                                               options=self.browser_options)
+
+    def _engine_stopped(self):
+        # Must run after BrowserResponseTrackerMiddleware._spider_closed().
+        try:
+            self._browser.broker.transport.signalProcess("TERM")
+        except AttributeError:
+            pass
 
     @inlineCallbacks
     def _get_browser(self):

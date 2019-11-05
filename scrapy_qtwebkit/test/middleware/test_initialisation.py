@@ -1,7 +1,6 @@
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 from twisted.internet.defer import fail, inlineCallbacks
-from twisted.internet.endpoints import ProcessEndpoint
 from twisted.internet.error import ConnectError
 from twisted.spread.pb import PBConnectionLost
 
@@ -71,31 +70,3 @@ class MiddlewareInitialisationTest(MiddlewareTest):
             yield mw._init_browser()
 
         assert mw._browser is None
-
-    @inlineCallbacks
-    def test_init_browser_process_ender(self):
-        with self.patch_ProcessEndpoint() as mock_ProcessEndpoint:
-            mock_endpoint = Mock(spec=ProcessEndpoint(Mock(), Mock()))
-            mock_ProcessEndpoint.return_value = mock_endpoint
-            mw = self.make_middleware({
-                'BROWSER_ENGINE_START_SERVER': True
-            })
-
-        with patch('atexit.register') as mock_atexit_register:
-            yield mw._init_browser()
-            mock_endpoint.connect.assert_called_with(self.mock_factory)
-            assert mock_atexit_register.called
-
-    @inlineCallbacks
-    def test_init_browser_no_process_ender(self):
-        with self.patch_ProcessEndpoint() as mock_ProcessEndpoint:
-            mw = self.make_middleware({
-                'BROWSER_ENGINE_SERVER': 'tcp:localhost:8000'
-            })
-            assert not mock_ProcessEndpoint.called
-
-        with patch('atexit.register') as mock_atexit_register:
-            yield mw._init_browser()
-
-            self.mock_endpoint.connect.assert_called_with(self.mock_factory)
-            assert not mock_atexit_register.called
