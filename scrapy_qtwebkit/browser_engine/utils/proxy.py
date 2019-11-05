@@ -1,3 +1,4 @@
+import os
 import tempfile
 from urllib.parse import urljoin
 
@@ -9,30 +10,42 @@ from twisted.web import http
 from ..._intermediaries import RequestFromBrowser
 
 
-class DummySSLContextFactory(ssl.DefaultOpenSSLContextFactory):
+class TmpCertSSLContextFactory(ssl.DefaultOpenSSLContextFactory):
     def __init__(self):
-        self._gen_cert()
-        super().__init__(self._key_file.name, self._cert_file.name)
+        super().__init__(*self._gen_cert())
 
-    def _gen_cert(self):
+    @staticmethod
+    def _gen_cert():
         key = crypto.PKey()
         key.generate_key(crypto.TYPE_RSA, 1024)
         cert = crypto.X509()
+        cert.gmtime_adj_notBefore(0)
+        cert.set_notAfter(b'99991231235959Z')
+        cert.set_issuer(cert.get_subject())
         cert.set_pubkey(key)
         cert.sign(key, 'sha1')
 
-        self._cert_file = tempfile.NamedTemporaryFile()
-        self._key_file = tempfile.NamedTemporaryFile()
-        self._cert_file.write(crypto.dump_certificate(crypto.FILETYPE_PEM,
-                                                      cert))
-        self._key_file.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, key))
+        key_file = tempfile.NamedTemporaryFile(delete=False)
+        key_file.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, key))
+        key_file.close()
+
+        cert_file = tempfile.NamedTemporaryFile(delete=False)
+        cert_file.write(crypto.dump_certificate(crypto.FILETYPE_PEM, cert))
+        cert_file.close()
+
+        return key_file.name, cert_file.name
+
+    def __del__(self):
+        os.unlink(self.privateKeyFileName)
+        os.unlink(self.certificateFileName)
+
 
 
 class RemoteScrapyProxyRequest(http.Request):
     def process(self):
         if self.method == b'CONNECT':
             self.finish()
-            self.transport.startTLS(DummySSLContextFactory())
+            self.transport.startTLS(TmpCertSSLContextFactory())
             return
 
         # TODO: port
