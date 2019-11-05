@@ -1,3 +1,4 @@
+import cgi
 import sys
 from types import SimpleNamespace
 
@@ -17,13 +18,12 @@ from .js import get_js_value
 
 
 def _setup_pre_reactor():
-    import gi
     # Some packagers do not include pygtkcompat, yet the Twisted GTK 3 reactor
     # setup always expects it. gi seems to do the necessary checks so make a
     # dummy module to keep Twisted happy.
     # TODO: check since which version gi checks for conflict.
     try:
-        import gi.pygtkcompat
+        import gi.pygtkcompat as _pygtkcompat
     except ImportError:
         _pygtkcompat = SimpleNamespace(enable=lambda: None)
         sys.modules["gi.pygtkcompat"] = gi.pygtkcompat = _pygtkcompat
@@ -100,9 +100,22 @@ class WebPageRemoteControl(pb.Referenceable):
     def remote_close(self):
         return self._close()
 
+    @staticmethod
+    def _load_finished(webview):
+        d = Deferred()
+
+        def on_load_changed(webview, event):
+            if event == WebKit2.LoadEvent.FINISHED:
+                webview.disconnect(handler_id)
+                d.callback(None)
+
+        handler_id = webview.connect("load_changed", on_load_changed)
+
+        return d
+
     @inlineCallbacks
     def remote_load_request(self, request: RequestFromScrapy):
-        # WebKit2GTK does not support setting headers or method when loading
+        # WebKitGTK does not support setting headers or method when loading
         # request. Instead, make the request and set it as the content.
         remote_req = RequestFromBrowser(
             url=request.url,
@@ -114,26 +127,23 @@ class WebPageRemoteControl(pb.Referenceable):
         )
         response = yield self._downloader.callRemote('make_request', remote_req)
 
-        # TODO: make headers a caseless dict.
+        # Scrapy's Headers object keeps headers in title case.
         ctype = response.headers.get(b'Content-Type')
         if ctype:
-            mime_type = ctype[0].decode().split(';', 1)[0]
+            mime_type, mime_type_params = cgi.parse_header(ctype[0].decode())
+            enconding = mime_type_params.get('charset')
         else:
             mime_type = None
+            enconding = None
 
-        d = Deferred()
+        load_finished = self._load_finished(self._webview)
 
-        def on_load_changed(webview, event):
-            if event == WebKit2.LoadEvent.FINISHED:
-                webview.disconnect(handler_id)
-                d.callback(None)
+        self._webview.load_bytes(GLib.Bytes(response.body), mime_type,
+                                 enconding, request.url)
 
-        handler_id = self._webview.connect("load_changed", on_load_changed)
+        yield load_finished
 
-        self._webview.load_bytes(GLib.Bytes(response.body), mime_type, None,
-                                 request.url)
-
-        yield d
+        # TODO: report load errors.
         return (True, response.status, response.headers, None)
 
     def remote_get_url(self):
