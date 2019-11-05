@@ -54,13 +54,14 @@ class ScrapyNetworkAccessManager(QNetworkAccessManager):
         else:
             body = None
 
-        is_first_request = not self._had_requests
-
-        remote_req = RequestFromBrowser(url=request.url().toString(),
-                                        method=method, headers=headers,
-                                        body=body,
-                                        is_first_request=is_first_request,
-                                        cookiejarkey=self.cookiejarkey)
+        remote_req = RequestFromBrowser(
+            url=request.url().toString(),
+            method=method,
+            headers=headers,
+            body=body,
+            is_first_request=(not self._had_requests),
+            cookiejarkey=self.cookiejarkey
+        )
 
         self._had_requests = True
 
