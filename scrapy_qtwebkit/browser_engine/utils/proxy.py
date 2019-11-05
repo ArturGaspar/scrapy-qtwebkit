@@ -40,12 +40,12 @@ class TmpCertSSLContextFactory(ssl.DefaultOpenSSLContextFactory):
         os.unlink(self.certificateFileName)
 
 
-
 class RemoteScrapyProxyRequest(http.Request):
     def process(self):
         if self.method == b'CONNECT':
+            sslctxfactory = self.channel.factory._ssl_context_factory
             self.finish()
-            self.transport.startTLS(TmpCertSSLContextFactory())
+            self.transport.startTLS(sslctxfactory)
             return
 
         # TODO: port
@@ -102,7 +102,11 @@ class RemoteScrapyProxy(http.HTTPChannel):
 class RemoteScrapyProxyFactory(http.HTTPFactory):
     protocol = RemoteScrapyProxy
 
+    _ssl_context_factory = None
+
     def __init__(self, remote_downloader, *args, cookiejarkey=None, **kwargs):
+        if self.__class__._ssl_context_factory is None:
+            self.__class__._ssl_context_factory = TmpCertSSLContextFactory()
         super().__init__(*args, **kwargs)
         self.remote_downloader = remote_downloader
         self.cookiejarkey = cookiejarkey
