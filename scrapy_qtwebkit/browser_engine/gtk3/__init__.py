@@ -42,8 +42,6 @@ class Browser(pb.Referenceable):
         self._windows = None
 
     def remote_create_webpage(self, options: dict):
-        webview = WebKit2.WebView()
-
         proxy = RemoteScrapyProxyFactory(
             remote_downloader=self.downloader,
             cookiejarkey=options.get('cookiejarkey')
@@ -52,44 +50,55 @@ class Browser(pb.Referenceable):
         listeningport = self._reactor.listenTCP(0, proxy)
         port = listeningport.getHost().port
 
-        ctx = webview.get_context()
+        ctx = WebKit2.WebContext.new_ephemeral()
         ctx.set_network_proxy_settings(
             WebKit2.NetworkProxyMode.CUSTOM,
             WebKit2.NetworkProxySettings(f'http://localhost:{port}', None)
         )
         ctx.set_tls_errors_policy(WebKit2.TLSErrorsPolicy.IGNORE)
 
+        webview = WebKit2.WebView.new_with_context(ctx)
+
         if self.options.get('show_windows', False):
             window = Gtk.Window()
             window.add(webview)
             window.show_all()
-            webview._window = window
         else:
-            webview._window = None
+            window = None
 
-        return WebPageRemoteControl(self, self.downloader, options, webview)
+        return WebPageRemoteControl(self, self.downloader, options, webview,
+                                    window, listeningport)
 
 
 class WebPageRemoteControl(pb.Referenceable):
     def __init__(self, browser: Browser, downloader, options: dict,
-                 webview: WebKit2.WebView):
+                 webview: WebKit2.WebView, window, listeningport):
         super().__init__()
         self.browser = browser
         self._downloader = downloader
         self._options = options
         self._url = None
         self._webview = webview
+        self._window = window
+        self._listeningport = listeningport
 
     def _close(self):
-        self._webview.destroy()
-        if self._webview._window:
-            self._webview._window.destroy()
+        if self._webview:
+            self._webview.destroy()
+            self._webview = None
+        if self._window:
+            self._window.destroy()
+            self._window = None
+        if self._listeningport:
+            port = self._listeningport
+            self._listeningport = None
+            return port.stopListening()
 
     def __del__(self):
         self._close()
 
     def remote_close(self):
-        self._close()
+        return self._close()
 
     @inlineCallbacks
     def remote_load_request(self, request: RequestFromScrapy):
