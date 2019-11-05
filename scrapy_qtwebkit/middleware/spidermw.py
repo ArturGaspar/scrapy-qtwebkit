@@ -2,7 +2,8 @@ import logging
 import weakref
 from collections.abc import Collection, Mapping
 
-from scrapy import Request
+from scrapy import Request, signals
+from twisted.internet.defer import DeferredList
 
 from .http import BrowserResponse
 
@@ -32,10 +33,20 @@ class BrowserResponseTrackerMiddleware(object):
     # Weak references are used so as not to keep a browser page open if the user
     # deletes the response before returning from the callback.
 
+    @classmethod
+    def from_crawler(cls, crawler):
+        mw = cls()
+        crawler.signals.connect(mw._spider_closed, signal=signals.spider_closed)
+        return mw
+
     def __init__(self):
         super().__init__()
         self._responses_with_user = DefaultWeakKeyDict(int)
         self._responses_with_scrapy = DefaultWeakKeyDict(int)
+        self._pending_close_requests = set()
+
+    def _spider_closed(self):
+        return DeferredList(self._pending_close_requests)
 
     def _get_browser_responses(self, values, seen_objects=()):
         seen_objects += (values,)
@@ -92,9 +103,15 @@ class BrowserResponseTrackerMiddleware(object):
             user_count = self._responses_with_user[response]
             if (scrapy_count + user_count) == 0:
                 logger.info(f"Closing webpage in response {response!r}")
-                response.close_webpage()
+                dfd = response.close_webpage()
+                self._pending_close_requests.add(dfd)
+                dfd.addBoth(self._complete_close_request, dfd)
             else:
                 logger.debug(f"Not closing webpage in response {response!r}, "
                              f"held by Scrapy {scrapy_count} times and by user "
                              f"{user_count} times")
             del response
+
+    def _complete_close_request(self, result, dfd):
+        self._pending_close_requests.remove(dfd)
+        return result
