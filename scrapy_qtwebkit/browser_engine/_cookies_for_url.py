@@ -27,7 +27,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-
+import time
 from http.cookiejar import IPV4_RE
 from urllib.parse import urlparse
 from urllib.request import Request
@@ -73,6 +73,8 @@ def cookies_for_url(jar, url):
             hosts += host + ".local"
     else:
         hosts = [host]
+
+    jar._policy._now = jar._now = int(time.time())
 
     for host in hosts:
         if host in jar._cookies:

@@ -43,15 +43,13 @@ class BrowserRequestDownloader(pb.Referenceable, object):
         # TODO: allow user to set a key on parent request and set it on all
         # requests from it.
 
-        cookiejarkey = request_from_browser.cookiejarkey
         meta = {
             # XXX: could handle redirects on this side to avoid round-trips.
             'dont_redirect': True,
             'handle_httpstatus_all': True,
             'from_browser': True,
             'browser_page_first_request': request_from_browser.is_first_request,
-            'dont_merge_cookies': (cookiejarkey is None),
-            'cookiejar': cookiejarkey
+            'dont_merge_cookies': True
         }
 
         # TODO: increase priority.

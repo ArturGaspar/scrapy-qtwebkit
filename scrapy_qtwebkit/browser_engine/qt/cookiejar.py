@@ -41,13 +41,16 @@ class CookielibQtCookieJar(QNetworkCookieJar):
         path = absent_if_none(qt_cookie.path())
         path_specified = path is not Absent
 
-        expires = (qt_cookie.expirationDate().toTime_t()
-                   if not qt_cookie.expirationDate().isNull()
-                   else Absent)
-        discard = expires is Absent
+        qdate = qt_cookie.expirationDate()
+        if qdate:
+            expires = qt_cookie.expirationDate().toTime_t()
+            discard = False
+        else:
+            expires = None
+            discard = True
 
         return Cookie(
-            version=None,
+            version=0,
             name=bytes(qt_cookie.name()),
             value=bytes(qt_cookie.value()),
             port=None,
@@ -84,9 +87,13 @@ class CookielibQtCookieJar(QNetworkCookieJar):
             return True
 
     def insertCookie(self, qt_cookie):
-        expiration_date = qt_cookie.expirationDate().toPyDateTime()
-        is_deletion = ((not qt_cookie.isSessionCookie()) and
-                       expiration_date < datetime.datetime.now())
+        expdate = qt_cookie.expirationDate()
+        if expdate:
+            expiration_date = expdate.toPyDateTime()
+            is_deletion = ((not qt_cookie.isSessionCookie()) and
+                           expdate.toPyDateTime() < datetime.datetime.now())
+        else:
+            is_deletion = False
 
         if is_deletion:
             self.deleteCookie(qt_cookie)

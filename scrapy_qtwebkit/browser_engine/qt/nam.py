@@ -1,8 +1,8 @@
 from io import BytesIO
 
 from PyQt5.QtCore import QIODevice, QUrl
-from PyQt5.QtNetwork import (QNetworkAccessManager, QNetworkReply,
-                             QNetworkRequest)
+from PyQt5.QtNetwork import (QNetworkAccessManager, QNetworkCookie,
+                             QNetworkReply, QNetworkRequest)
 
 from twisted.internet.error import (ConnectingCancelledError,
                                     ConnectionAborted, ConnectionLost,
@@ -42,9 +42,18 @@ class ScrapyNetworkAccessManager(QNetworkAccessManager):
         else:
             method = QT_OPERATION_TO_HTTP_METHOD[operation]
 
+        qtcookies = self.cookieJar().cookiesForUrl(request.url())
+        if qtcookies:
+            request.setRawHeader(b'Cookie', b'; '.join(
+                c.toRawForm(QNetworkCookie.NameAndValueOnly)
+                for c in qtcookies
+            ))
+
         request.setHeader(QNetworkRequest.UserAgentHeader, None)
+
         headers = {bytes(header): bytes(request.rawHeader(header))
                    for header in request.rawHeaderList()}
+
         if self.user_agent is not None:
             headers[b'User-Agent'] = self.user_agent
 
@@ -87,16 +96,21 @@ class ScrapyNetworkReply(QNetworkReply):
             return
 
         if response.status in {301, 302, 303, 307}:
-            location = response.headers.get('Location')
+            location = response.headers.get(b'Location')
             if location:
                 self.setAttribute(QNetworkRequest.RedirectionTargetAttribute,
-                                  QUrl(location))
+                                  QUrl(location[0].decode()))
 
         self.setUrl(QUrl(response.url))
         self.setAttribute(QNetworkRequest.HttpStatusCodeAttribute,
                           response.status)
         for header, values in response.headers.items():
             self.setRawHeader(header, b', '.join(values))
+
+        qcookies = self.header(QNetworkRequest.SetCookieHeader)
+        if qcookies:
+            self.parent().cookieJar().setCookiesFromUrl(qcookies, self.url());
+
         self.content.write(response.body)
         self.content.seek(0)
         self.downloadProgress.emit(len(response.body), len(response.body))

@@ -51,13 +51,18 @@ class CustomQWebPage(QWebPage):
         super().setNetworkAccessManager(nam)
         self.networkAccessManager().finished.connect(self._on_network_reply)
 
+    def _has_error(self):
+        return (self._current_error is not None and
+                not isinstance(self._current_error,
+                               MyErrorPageExtensionOption))
+
     def reset_current_error(self):
         self._current_error = None
 
     def _on_network_reply(self, reply):
-        if self._current_error:
+        if self._has_error():
             return
-        if reply.error() == QNetworkReply.NoError:
+        if not self._current_error and reply.error() == QNetworkReply.NoError:
             self._current_error = MyErrorPageExtensionOption()
             self._current_error.domain = QWebPage.Http
             self._current_error.error = reply.attribute(
@@ -72,14 +77,12 @@ class CustomQWebPage(QWebPage):
 
     def _on_load_finished(self, ok):
         error = self._current_error or self._dummy_error
-        if error.domain == QWebPage.Http:
-            ok = True
         self.reset_current_error()
         self.loadFinishedWithError.emit(ok, error)
 
     def extension(self, extension, option=None, output=None):
         if extension == QWebPage.ErrorPageExtension:
-            if self._current_error is None:
+            if not self._has_error():
                 self._current_error = option
 
         return False
