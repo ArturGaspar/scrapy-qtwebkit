@@ -64,19 +64,22 @@ class Browser(pb.Referenceable):
                                          **options)
         qwebpage.setNetworkAccessManager(nam)
 
+        cookiejar = options.get('cookiejar')
+
         if self.options.get('show_windows', False):
             self.show_window(qwebpage)
 
-        return WebPageRemoteControl(self, qwebpage)
+        return WebPageRemoteControl(self, qwebpage, cookiejar)
 
 
 class WebPageRemoteControl(pb.Referenceable):
-    def __init__(self, browser: Browser, qwebpage: CustomQWebPage):
+    def __init__(self, browser: Browser, qwebpage: CustomQWebPage, cookiejar):
         super().__init__()
         self.browser = browser
         self._url = None
         # XXX: nothing else should keep a reference to the webpage.
         self._qwebpage = qwebpage
+        self._cookiejar = cookiejar
 
     def _close(self):
         # Resetting the main frame URL prevents it from making further requests,
@@ -127,6 +130,9 @@ class WebPageRemoteControl(pb.Referenceable):
 
     @inlineCallbacks
     def remote_load_request(self, request: RequestFromScrapy):
+        if self._cookiejar:
+            yield self._cookiejar.commit()
+
         d = deferred_for_qt_signal(self._qwebpage.loadFinishedWithError)
         self._qwebpage.mainFrame().load(*self._make_qt_request(request))
 
@@ -150,6 +156,9 @@ class WebPageRemoteControl(pb.Referenceable):
         else:
             status = 200
 
+        if self._cookiejar:
+            yield self._cookiejar.sync()
+
         return (ok, status, headers, exc)
 
     def remote_get_url(self):
@@ -161,3 +170,13 @@ class WebPageRemoteControl(pb.Referenceable):
 
     def remote_run_script(self, script):
         return self._qwebpage.mainFrame().evaluateJavaScript(script)
+
+    def remote__sync_cookies(self):
+        """Ensure all cookie updates were sent to remote."""
+        if self._cookiejar:
+            return self._cookiejar.sync()
+
+    def remote__commit_cookies(self):
+        """Commit all cookie updates received from remote."""
+        if self._cookiejar:
+            return self._cookiejar.commit()

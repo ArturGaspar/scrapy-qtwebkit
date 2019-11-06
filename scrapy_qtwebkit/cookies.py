@@ -1,9 +1,12 @@
 from http.cookiejar import Cookie, CookieJar
 
+from twisted.internet.defer import DeferredList
 from twisted.spread import pb
 
+from .utils import PendingDeferreds
 
-class CopyableCookie(Cookie, pb.Copyable, pb.RemoteCopy, object):
+
+class CopyableCookie(Cookie, pb.Copyable, pb.RemoteCopy):
     @classmethod
     def from_regular_cookie(cls, cookie):
         args = {}
@@ -22,85 +25,130 @@ class CopyableCookie(Cookie, pb.Copyable, pb.RemoteCopy, object):
         self.__dict__ = state
 
 
-class _CookieJarRemoteMethodCaller(pb.Referenceable, object):
+class _CookieJarRemoteMethodCaller(pb.Referenceable):
     def __init__(self, cookiejar):
         super().__init__()
         self._cookiejar = cookiejar
 
-    def remote_set_cookie(self, changer_id, cookie):
-        self._cookiejar.set_cookie(cookie, changer_id=changer_id)
+    def remote_set_cookie(self, changer_id, key, cookie):
+        self._cookiejar._observe_cookie(key, cookie, changer_id=changer_id)
 
-    def remote_delete_cookie(self, changer_id, domain, path, name):
-        self._cookiejar.clear(domain, path, name, change_id=changer_id)
+    def remote_commit(self):
+        return self._cookiejar.commit()
 
 
-class RemotelyAccessibleCookieJar(CookieJar, pb.Cacheable, object):
-    def __init__(self, policy=None):
+class SynchronisedCookieJar(CookieJar):
+    def __init__(self, policy=None, auto_sync=False, local_observers=None):
         super().__init__(policy=policy)
+        self._remote_changes = {}
+        self._pending = PendingDeferreds()
+        self._auto_sync = auto_sync
+        self.local_observers = local_observers or []
+
+    def sync(self):
+        """Ensure the remote copy has received all updates."""
+        if self._auto_sync:
+            return
+
+        return self._pending.deferred()
+
+    def commit(self):
+        """Commit updates received from the remote."""
+        if self._auto_sync:
+            return
+
+        result = []
+        changes = list(self._remote_changes.items())
+        self._remote_changes.clear()
+        for key, cookie in changes:
+            self._do_change(key, cookie)
+            result.extend(observer.observe_cookie(key, cookie)
+                          for observer in self.local_observers)
+        if result:
+            return DeferredList(result).addCallback(lambda result: None)
+
+    def _observe_cookie(self, key, cookie):
+        if self._auto_sync:
+            self._do_change(key, cookie)
+            if self.local_observers:
+                return DeferredList(observer.observe_cookie(key, cookie)
+                                    for observer in self.local_observers
+                                    ).addCallback(lambda result: None)
+        else:
+            self._remote_changes[key] = cookie
+
+    def _do_change(self, key, cookie):
+        if cookie:
+            super().set_cookie(cookie)
+        else:
+            super().clear(*key)
+
+
+class RemotelyAccessibleCookieJar(SynchronisedCookieJar, pb.Cacheable):
+    def __init__(self, policy=None, auto_sync=False):
+        super().__init__(policy=policy, auto_sync=auto_sync)
         self._remote_method_caller = _CookieJarRemoteMethodCaller(self)
-        self._observers = []
-        self._last_changer = {}
-
-    def set_cookie(self, cookie, changer_id=None):
-        if not isinstance(cookie, CopyableCookie):
-            cookie = CopyableCookie.from_regular_cookie(cookie)
-        super().set_cookie(cookie)
-        self._notify_observers((cookie.domain, cookie.path, cookie.name),
-                               changer_id, 'set_cookie', cookie)
-
-    def clear(self, domain, path, name, changer_id=None):
-        if domain is None or path is None or name is None:
-            raise ValueError("domain, path and name must be given")
-        super().clear(domain, path, name)
-        self._notify_observers((domain, path, name), changer_id,
-                               'delete_cookie', domain, path, name)
-
-    def _notify_observers(self, key, changer_id, method, *args):
-        # Observers record their own changes when sending them to the master,
-        # avoiding the need to communicate a change to the observer that made
-        # it.
-
-        # If another observer previously made a change to the key which this
-        # observer is changing now, the change made by the former may have
-        # reached the latter after it recorded its own change. Thus, in this
-        # case, the observer making the change now must also be notified.
-        is_same_changer = (changer_id is not None and
-                           self._last_changer.get(key) == changer_id)
-
-        self._last_changer[key] = changer_id
-
-        for o in self._observers:
-            if is_same_changer and changer_id == hash(o):
-                continue
-            o.callRemote(method, *args)
+        self._observers = set()
+        self._staged_last_changer = {}
 
     def getStateToCacheAndObserveFor(self, perspective, observer):
-        self._observers.append(observer)
-        return self._cookies, self._remote_method_caller, hash(observer)
+        self._observers.add(observer)
+        return (self._cookies, self._remote_method_caller, hash(observer),
+                self._auto_sync)
 
     def stoppedObserving(self, perspective, observer):
         self._observers.remove(observer)
 
+    def _observe_cookie(self, key, cookie, changer_id=None):
+        self._staged_last_changer[key] = changer_id
+        super()._observe_cookie(key, cookie)
 
-class RemoteCookieJar(CookieJar, pb.RemoteCache, object):
-    def setCopyableState(self, state):
-        self._cookies, self._jarmethods, self._observer_id = state
+    def _do_change(self, key, cookie):
+        last_changer_id = self._staged_last_changer.pop(key)
+        for obs in self._observers:
+            if hash(obs) == last_changer_id:
+                continue
+            self._pending.add(obs.callRemote('observe_cookie', key, cookie))
 
-    def observe_set_cookie(self, cookie):
-        super().set_cookie(cookie)
-
-    def observe_delete_cookie(self, domain, path, name):
-        super().clear(domain, path, name)
+        super()._do_change(key, cookie)
 
     def set_cookie(self, cookie):
         if not isinstance(cookie, CopyableCookie):
             cookie = CopyableCookie.from_regular_cookie(cookie)
-        self._jarmethods.callRemote('set_cookie', self._observer_id, cookie)
-        self.observe_set_cookie(cookie)
+        key = (cookie.domain, cookie.path, cookie.name)
+        self._staged_last_changer[key] = None
+        self._do_change(key, cookie)
 
     def clear(self, domain, path, name):
         if domain is None or path is None or name is None:
             raise ValueError("domain, path and name must be given")
-        self._jarmethods.callRemote('delete_cookie', self._observer_id,
-                                    domain, path, name)
-        self.observe_delete_cookie(domain, path, name)
+        key = (domain, path, name)
+        self._staged_last_changer[key] = None
+        self._do_change(key, None)
+
+
+class RemoteCookieJar(SynchronisedCookieJar, pb.RemoteCache):
+    def setCopyableState(self, state):
+        (self._cookies, self._jarmethods, self._observer_id,
+         self._auto_sync) = state
+
+    def observe_cookie(self, key, cookie):
+        self._observe_cookie(key, cookie)
+
+    def _remote_set_cookie(self, *args, **kwargs):
+        return self._pending.add(self._jarmethods.callRemote('set_cookie',
+                                                             *args, **kwargs))
+
+    def set_cookie(self, cookie):
+        if not isinstance(cookie, CopyableCookie):
+            cookie = CopyableCookie.from_regular_cookie(cookie)
+        key = (cookie.domain, cookie.path, cookie.name)
+        self._remote_set_cookie(self._observer_id, key, cookie)
+        super().set_cookie(cookie)
+
+    def clear(self, domain, path, name):
+        if domain is None or path is None or name is None:
+            raise ValueError("domain, path and name must be given")
+        key = (domain, path, name)
+        self._remote_set_cookie(self._observer_id, key, None)
+        super().clear(domain, path, name)

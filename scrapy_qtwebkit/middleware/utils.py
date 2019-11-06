@@ -11,8 +11,12 @@ class PBReferenceMethodsWrapper(object):
         try:
             value = getattr(self._pb_reference, attr)
         except AttributeError:
-            # Allows accessing remote methods by name (without remote_ prefix).
-            value = self._pb_reference.remoteMethod(attr)
+            if attr.startswith('_'):
+                raise
+            else:
+                # Allows accessing remote methods by name (without remote_
+                # prefix).
+                value = self._pb_reference.remoteMethod(attr)
         return value
 
 

@@ -164,6 +164,8 @@ class BrowserMiddleware(object):
             cookiejar = self.cookies_mw.jars[cookiejarkey].jar
             options['cookiejarkey'] = cookiejarkey
             options['cookiejar'] = cookiejar
+        else:
+            cookiejar = None
 
         yield self._semaphore.acquire()
         try:
@@ -172,17 +174,23 @@ class BrowserMiddleware(object):
             self._semaphore.release()
             raise
 
+        if cookiejar:
+            yield cookiejar.sync()
+
         result = webpage.callRemote('load_request',
                                     RequestFromScrapy(request.url,
                                                       request.method,
                                                       request.headers,
                                                       request.body))
-        result.addCallback(partial(self._handle_page_load, request, webpage))
+        result.addCallback(partial(self._handle_page_load, request, webpage,
+                                   cookiejar))
         del webpage
         return (yield result)
 
     @inlineCallbacks
-    def _handle_page_load(self, request, webpage, load_result):
+    def _handle_page_load(self, request, webpage, cookiejar, load_result):
+        yield cookiejar.commit()
+
         browser_response = request.meta.get('browser_response', False)
 
         try:
@@ -206,6 +214,7 @@ class BrowserMiddleware(object):
                 if browser_response:
                     response._webpage = PBReferenceMethodsWrapper(webpage)
                     response._semaphore = self._semaphore
+                    response._cookiejar = cookiejar
 
             else:
                 if isinstance(exc, ScrapyNotSupported):
