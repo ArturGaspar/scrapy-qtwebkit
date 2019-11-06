@@ -49,21 +49,36 @@ class BrowserResponse(HtmlResponse):
             raise ValueError("cannot access response webpage after closing")
         return self._webpage
 
+    @staticmethod
+    @inlineCallbacks
+    def _sync_cookies(cookiejar, webpage):
+        # Sync and commit cookie updates from browser engine first, so that
+        # they prevail over cookie updates from the Scrapy side.
+        yield webpage.callRemote('_sync_cookies')
+        cookiejar.commit()
+
+        yield cookiejar.sync()
+        yield webpage.callRemote('_commit_cookies')
+
     @inlineCallbacks
     def sync_cookies(self):
         if self._cookiejar:
-            # Sync and commit updates from browser engine first, so that they
-            # prevail over updates from Scrapy.
-            yield self._webpage.callRemote('_sync_cookies')
-            self._cookiejar.commit()
-
-            yield self._cookiejar.sync()
-            yield self._webpage.callRemote('_commit_cookies')
+            return self._sync_cookies(self._cookiejar, self.webpage)
 
     def close_webpage(self):
         if self._webpage:
-            dfd_close = self._webpage.callRemote('close')
+            webpage = self._webpage
             self._webpage = None
+
+            close_webpage = lambda result: webpage.callRemote('close')
+
+            if self._cookiejar:
+                cookiejar = self._cookiejar
+                self._cookiejar = None
+                dfd_close = self._sync_cookies(cookiejar, webpage)
+                dfd_close.addCallback(lambda r: webpage.callRemote('close'))
+            else:
+                dfd_close = close_webpage(None)
 
             semaphore = self._semaphore
             self._semaphore = None
