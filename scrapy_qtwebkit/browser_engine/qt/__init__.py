@@ -137,24 +137,22 @@ class WebPageRemoteControl(pb.Referenceable):
         self._qwebpage.mainFrame().load(*self._make_qt_request(request))
 
         ok, error = yield d
-        status = None
-        headers = {}
         exc = None
 
-        if not ok:
-            self._url = error.url
-            if error.domain == QWebPage.Http:
-                ok = True
-                status = error.error
-            else:
-                if error.domain == QWebPage.QtNetwork:
-                    exc_cls = self.qt_error_exc_mapping.get(error.error,
-                                                            ConnectError)
-                else:
-                    exc_cls = Exception
-                exc = exc_cls(error.errorString)
+        self._url = error.url
+        if error.domain == QWebPage.Http:
+            ok = True
+            status = error.error
+            headers = getattr(error, 'headers', {})
         else:
-            status = 200
+            status = None
+            headers = None
+            if error.domain == QWebPage.QtNetwork:
+                exc_cls = self.qt_error_exc_mapping.get(error.error,
+                                                        ConnectError)
+            else:
+                exc_cls = Exception
+            exc = exc_cls(error.errorString)
 
         if self._cookiejar:
             yield self._cookiejar.sync()

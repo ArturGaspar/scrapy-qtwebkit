@@ -1,5 +1,3 @@
-from functools import partial
-
 from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest
 from PyQt5.QtWebKitWidgets import QWebPage
@@ -39,30 +37,29 @@ class CustomQWebPage(QWebPage):
     loadFinishedWithError = pyqtSignal(bool, QWebPage.ErrorPageExtensionOption)
 
     _dummy_error = QWebPage.ErrorPageExtensionOption()
+    _dummy_error.domain = QWebPage.Http
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.webview = None
         self._current_error = None
         self.loadFinished.connect(self._on_load_finished)
-        self.loadStarted.connect(self.reset_current_error)
 
     def setNetworkAccessManager(self, nam):
         super().setNetworkAccessManager(nam)
         self.networkAccessManager().finished.connect(self._on_network_reply)
 
     def _has_error(self):
-        return (self._current_error is not None and
+        return (self._current_error and
                 not isinstance(self._current_error,
                                MyErrorPageExtensionOption))
-
-    def reset_current_error(self):
-        self._current_error = None
 
     def _on_network_reply(self, reply):
         if self._has_error():
             return
         if not self._current_error and reply.error() == QNetworkReply.NoError:
+            if reply.attribute(QNetworkRequest.RedirectionTargetAttribute):
+                return
             self._current_error = MyErrorPageExtensionOption()
             self._current_error.domain = QWebPage.Http
             self._current_error.error = reply.attribute(
@@ -72,12 +69,13 @@ class CustomQWebPage(QWebPage):
             self._current_error.errorString = reply.attribute(
                 QNetworkRequest.HttpReasonPhraseAttribute
             )
-            self._current_error.headers = dict(map(partial(map, str),
-                                                   reply.rawHeaderPairs()))
+            self._current_error.headers = {bytes(h): bytes(v)
+                                           for h, v in reply.rawHeaderPairs()}
+        # TODO: network error.
 
     def _on_load_finished(self, ok):
         error = self._current_error or self._dummy_error
-        self.reset_current_error()
+        self._current_error = None
         self.loadFinishedWithError.emit(ok, error)
 
     def extension(self, extension, option=None, output=None):
