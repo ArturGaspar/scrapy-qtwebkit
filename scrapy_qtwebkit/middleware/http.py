@@ -60,7 +60,6 @@ class BrowserResponse(HtmlResponse):
         yield cookiejar.sync()
         yield webpage.callRemote('_commit_cookies')
 
-    @inlineCallbacks
     def sync_cookies(self):
         if self._cookiejar:
             return self._sync_cookies(self._cookiejar, self.webpage)

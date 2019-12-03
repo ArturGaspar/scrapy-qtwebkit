@@ -17,7 +17,7 @@ class CookielibQtCookieJar(QNetworkCookieJar):
     @staticmethod
     def _make_qt_cookie(cookie):
         """Build a QNetworkCookie object from a cookielib.Cookie object."""
-        qt_cookie = QNetworkCookie(cookie.name, cookie.value)
+        qt_cookie = QNetworkCookie(cookie.name.encode(), cookie.value.encode())
         qt_cookie.setDomain(cookie.domain)
         if cookie.expires is not None:
             qt_cookie.setExpirationDate(QDateTime.fromTime_t(cookie.expires))
@@ -51,8 +51,8 @@ class CookielibQtCookieJar(QNetworkCookieJar):
 
         return Cookie(
             version=0,
-            name=bytes(qt_cookie.name()),
-            value=bytes(qt_cookie.value()),
+            name=bytes(qt_cookie.name()).decode(),
+            value=bytes(qt_cookie.value()).decode(),
             port=None,
             port_specified=False,
             domain=domain,
