@@ -3,6 +3,9 @@ from twisted.internet.defer import inlineCallbacks
 from twisted.spread import pb
 
 
+from .cookies import sync_cookies
+
+
 class _RemoteRequestCounter(pb.Referenceable):
     def __init__(self, request):
         super().__init__()
@@ -20,8 +23,10 @@ class BrowserRequest(Request):
     """
 
     def __init__(self, *args, **kwargs):
-        # kwargs.setdefault('dont_filter', True)
+        kwargs.setdefault('dont_filter', True)
         super().__init__(*args, **kwargs)
+        self.meta.setdefault('dont_redirect', True)
+        self.meta.setdefault('handle_httpstatus_all', True)
         self.actual_requests = 0
         self.remote_counter = _RemoteRequestCounter(self)
 
@@ -49,20 +54,9 @@ class BrowserResponse(HtmlResponse):
             raise ValueError("cannot access response webpage after closing")
         return self._webpage
 
-    @staticmethod
-    @inlineCallbacks
-    def _sync_cookies(cookiejar, webpage):
-        # Sync and commit cookie updates from browser engine first, so that
-        # they prevail over cookie updates from the Scrapy side.
-        yield webpage.callRemote('_sync_cookies')
-        cookiejar.commit()
-
-        yield cookiejar.sync()
-        yield webpage.callRemote('_commit_cookies')
-
     def sync_cookies(self):
         if self._cookiejar:
-            return self._sync_cookies(self._cookiejar, self.webpage)
+            return sync_cookies(self._cookiejar, self.webpage)
 
     def close_webpage(self):
         if self._webpage:
@@ -74,7 +68,7 @@ class BrowserResponse(HtmlResponse):
             if self._cookiejar:
                 cookiejar = self._cookiejar
                 self._cookiejar = None
-                dfd_close = self._sync_cookies(cookiejar, webpage)
+                dfd_close = sync_cookies(cookiejar, webpage)
                 dfd_close.addCallback(lambda r: webpage.callRemote('close'))
             else:
                 dfd_close = close_webpage(None)

@@ -89,7 +89,6 @@ class CookielibQtCookieJar(QNetworkCookieJar):
     def insertCookie(self, qt_cookie):
         expdate = qt_cookie.expirationDate()
         if expdate:
-            expiration_date = expdate.toPyDateTime()
             is_deletion = ((not qt_cookie.isSessionCookie()) and
                            expdate.toPyDateTime() < datetime.datetime.now())
         else:
@@ -100,11 +99,5 @@ class CookielibQtCookieJar(QNetworkCookieJar):
             return False
         else:
             cookie = self._make_cookielib_cookie(qt_cookie)
-            # XXX: what
-            # perhaps expiration?
-            if cookie is not None:
-                self._jar.set_cookie(cookie)
-                return True
-            else:
-                self.deleteCookie(qt_cookie)
-                return False
+            self._jar.set_cookie(cookie)
+            return True

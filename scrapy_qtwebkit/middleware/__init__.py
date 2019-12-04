@@ -16,7 +16,7 @@ from twisted.python.failure import Failure
 from twisted.spread import jelly, pb
 
 from .._intermediaries import RequestFromScrapy, ScrapyNotSupported
-from .cookies import RemotelyAccessibleCookiesMiddleware
+from .cookies import RemotelyAccessibleCookiesMiddleware, sync_cookies
 from .downloader import BrowserRequestDownloader
 from .http import BrowserRequest, BrowserResponse
 from .spidermw import BrowserResponseTrackerMiddleware
@@ -176,6 +176,7 @@ class BrowserMiddleware(object):
 
         if cookiejar:
             yield cookiejar.sync()
+            yield webpage.callRemote('_commit_cookies')
 
         result = webpage.callRemote('load_request',
                                     RequestFromScrapy(request.url,
@@ -189,7 +190,8 @@ class BrowserMiddleware(object):
 
     @inlineCallbacks
     def _handle_page_load(self, request, webpage, cookiejar, load_result):
-        yield cookiejar.commit()
+        if cookiejar:
+            yield sync_cookies(cookiejar, webpage)
 
         browser_response = request.meta.get('browser_response', False)
 
